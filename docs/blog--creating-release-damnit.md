@@ -230,6 +230,44 @@ This confirms the full flow works end-to-end: merge detection → commit analysi
 
 Building from source in CI means no binary distribution headaches (which architecture? which OS?). Go compiles fast enough that this doesn't noticeably impact CI times.
 
+### Phase 5.5: Comprehensive E2E Testing
+
+**The mock repo grew to mirror sh-monorepo.** The initial mock repo was simple - 4 services with basic linking. But to validate release-damnit for production use, it needed to test the same scenarios we'd face:
+
+- **Nested packages**: `jarvis/clients/web` should match `jarvis-web`, not `jarvis` (deepest match wins)
+- **Linked versions**: Change to `ma-observe-client` should bump `ma-observe-server` too
+- **Breaking changes**: `feat!` should trigger major bumps
+- **Stacked commits**: Multiple commits of varying severity (chore, fix, feat) should pick the highest (feat wins)
+- **Multi-package changes**: A feature touching jarvis, sandbox-portal, and infrastructure should bump all three independently
+
+**The setup script became a full simulation.** `scripts/setup-mock-repo.sh` now creates:
+- 8 packages matching sh-monorepo structure
+- 6 feature branches, each testing a specific scenario
+- A `.github/workflows/release-damnit.yml` with conditional build jobs
+
+**Six scenario tests validate behavior without touching GitHub:**
+
+```go
+TestE2E_Scenario_SingleFeat       // jarvis 0.1.0 → 0.1.1
+TestE2E_Scenario_MultiPackage     // 3 packages bumped independently
+TestE2E_Scenario_BreakingChange   // sandbox-portal 0.1.0 → 1.0.0
+TestE2E_Scenario_LinkedVersions   // client+server both bump
+TestE2E_Scenario_StackedCommits   // feat wins over fix and chore
+TestE2E_Scenario_NestedPackage    // jarvis-web, not jarvis
+```
+
+**Three full GitHub tests create real releases:**
+
+```go
+TestE2E_FullGitHubReleaseFlow_SingleFeat      // Creates jarvis-v0.1.1
+TestE2E_FullGitHubReleaseFlow_LinkedVersions  // Creates ma-observe-client-v0.1.1 + server
+TestE2E_FullGitHubReleaseFlow_MultiPackage    // Creates 3 releases
+```
+
+Each test creates a timestamped branch, pushes to origin, creates releases, verifies via `gh release view`, and cleans up. The mock repo can be reset to baseline anytime with `setup-mock-repo.sh`.
+
+**All 12 E2E tests pass consistently.** The test suite takes about 50 seconds - mostly network time for GitHub operations. Fast enough to run on every commit, comprehensive enough to catch real bugs.
+
 ### Phase 6: sh-monorepo Integration
 
 **Documentation first, migration second.** Before switching the production workflow, I created:

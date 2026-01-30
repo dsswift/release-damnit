@@ -173,6 +173,35 @@ var conventionalCommitRegex = regexp.MustCompile(
 
 **The test pyramid worked.** Unit tests caught logic bugs fast. Integration tests (with temp git repos) verified git traversal. E2E tests (with the real GitHub repo) verified the full flow including linked versions across multiple packages.
 
+### Phase 5: GitHub Integration
+
+**GitHub release creation uses the gh CLI.** Rather than implementing OAuth flows and GitHub API calls directly, we shell out to `gh release create`. The gh CLI handles authentication, retries, and all the edge cases. This is a deliberate choice - the gh CLI is already installed in most CI environments and handles auth via GITHUB_TOKEN automatically.
+
+**Release notes are generated from commits.** The `BuildReleaseNotes()` function categorizes commits by type (Features, Bug Fixes, Performance Improvements) and formats them as markdown. Each commit includes a link to its SHA on GitHub.
+
+```go
+// Build release notes from commits
+features := filterCommitsByType(rel.Commits, "feat")
+fixes := filterCommitsByType(rel.Commits, "fix")
+perfs := filterCommitsByType(rel.Commits, "perf")
+```
+
+**Linked packages need special handling in release notes.** When service-a and service-b are linked but only service-a was touched, service-b gets a version bump but has no commits to document. The release notes for service-b are essentially empty (just the header). This is correct - the version bump is for synchronization, not because something changed in service-b.
+
+**E2E testing for actual release creation is tricky.** The original plan was to create real GitHub releases in the mock repo during E2E tests. But this fails because:
+1. Local commits in a temp clone don't exist on the remote
+2. GitHub's API rejects `--target <sha>` when the SHA doesn't exist on the remote
+3. Creating real releases would pollute the mock repo with test artifacts
+
+The solution: test release data building thoroughly (unit tests), test the full analysis-to-release-prep flow (E2E with dry-run), and trust the gh CLI for the actual API call. The gh CLI is well-tested - we don't need to verify it creates releases correctly.
+
+**The GitHub Action wrapper was simple.** `action.yml` is a composite action that:
+1. Sets up Go 1.22
+2. Builds the binary from source
+3. Runs with the provided flags
+
+Building from source in CI means no binary distribution headaches (which architecture? which OS?). Go compiles fast enough that this doesn't noticeably impact CI times.
+
 ---
 
 *More updates to come as the build progresses...*

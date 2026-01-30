@@ -315,3 +315,138 @@ func TestE2E_DryRunMakesNoChanges(t *testing.T) {
 		t.Error("dry run modified manifest file")
 	}
 }
+
+// TestE2E_CreateGitHubReleases_DryRun tests creating GitHub releases in dry-run mode.
+// This test verifies the release creation logic without actually creating releases.
+// Actual release creation is not tested in E2E because:
+// - Local commits don't exist on remote, causing GitHub API errors
+// - Creating real releases would pollute the mock repo
+func TestE2E_CreateGitHubReleases_DryRun(t *testing.T) {
+	dir := cloneMockRepo(t)
+
+	// Merge feature branch
+	runCmd(t, dir, "git", "merge", "--no-ff", "origin/feature/service-a-update", "-m", "Merge feature/service-a-update")
+
+	// Analyze
+	opts := &release.Options{
+		RepoPath:             dir,
+		DryRun:               false,
+		RepoURL:              "https://github.com/spraguehouse/mock--gitops-playground",
+		TreatPreMajorAsMinor: true,
+	}
+
+	result, err := release.Analyze(opts)
+	if err != nil {
+		t.Fatalf("Analyze failed: %v", err)
+	}
+
+	// Apply changes to update VERSION files etc
+	if err := release.Apply(result, false); err != nil {
+		t.Fatalf("Apply failed: %v", err)
+	}
+
+	// Create GitHub releases in DRY RUN mode
+	ghOpts := &release.GitHubReleaseOptions{
+		RepoPath: dir,
+		DryRun:   true, // Don't actually create releases
+	}
+
+	ghReleases, err := release.CreateGitHubReleases(result, ghOpts)
+	if err != nil {
+		t.Fatalf("CreateGitHubReleases (dry-run) failed: %v", err)
+	}
+
+	// Verify releases were prepared
+	if len(ghReleases) != 2 {
+		t.Fatalf("expected 2 releases, got %d", len(ghReleases))
+	}
+
+	// Verify release data
+	var hasFeatureSection bool
+	for _, ghRel := range ghReleases {
+		if ghRel.TagName == "" {
+			t.Error("release should have tag name")
+		}
+		if ghRel.Title == "" {
+			t.Error("release should have title")
+		}
+		if ghRel.Notes == "" {
+			t.Error("release should have notes")
+		}
+		if !strings.Contains(ghRel.Notes, "## ") {
+			t.Error("release notes should have version header")
+		}
+		// Track if any release has a Features section
+		// (linked packages without commits won't have this section)
+		if strings.Contains(ghRel.Notes, "Features") {
+			hasFeatureSection = true
+		}
+	}
+	// At least one release should have a Features section (service-a has feat commits)
+	if !hasFeatureSection {
+		t.Error("at least one release should have Features section")
+	}
+}
+
+// TestE2E_CheckGHCLI verifies the gh CLI check works.
+func TestE2E_CheckGHCLI(t *testing.T) {
+	// This test just verifies CheckGHCLI doesn't panic
+	// It may or may not be authenticated depending on the environment
+	err := release.CheckGHCLI()
+	if err != nil {
+		t.Logf("gh CLI not authenticated: %v (this is OK for E2E testing)", err)
+	} else {
+		t.Log("gh CLI is authenticated")
+	}
+}
+
+// TestE2E_BuildGitHubRelease tests building release data without creating actual releases.
+func TestE2E_BuildGitHubRelease(t *testing.T) {
+	dir := cloneMockRepo(t)
+
+	// Merge feature branch
+	runCmd(t, dir, "git", "merge", "--no-ff", "origin/feature/service-a-update", "-m", "Merge feature/service-a-update")
+
+	// Analyze
+	opts := &release.Options{
+		RepoPath:             dir,
+		DryRun:               true,
+		RepoURL:              "https://github.com/spraguehouse/mock--gitops-playground",
+		TreatPreMajorAsMinor: true,
+	}
+
+	result, err := release.Analyze(opts)
+	if err != nil {
+		t.Fatalf("Analyze failed: %v", err)
+	}
+
+	// Build release data (dry run)
+	for _, rel := range result.Releases {
+		ghRelease := release.BuildGitHubRelease(rel, opts.RepoURL)
+
+		// Verify tag format
+		expectedTag := rel.Package.Component + "-v" + rel.NewVersion
+		if ghRelease.TagName != expectedTag {
+			t.Errorf("expected tag %s, got %s", expectedTag, ghRelease.TagName)
+		}
+
+		// Verify title format
+		expectedTitle := rel.Package.Component + " v" + rel.NewVersion
+		if ghRelease.Title != expectedTitle {
+			t.Errorf("expected title %s, got %s", expectedTitle, ghRelease.Title)
+		}
+
+		// Verify notes content
+		if !strings.Contains(ghRelease.Notes, "## "+rel.Package.Component) {
+			t.Error("notes should have component in header")
+		}
+		if !strings.Contains(ghRelease.Notes, rel.NewVersion) {
+			t.Error("notes should contain new version")
+		}
+
+		// Check for compare link
+		if !strings.Contains(ghRelease.Notes, "Full Changelog") {
+			t.Error("notes should have Full Changelog link")
+		}
+	}
+}

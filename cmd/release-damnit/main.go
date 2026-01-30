@@ -20,7 +20,6 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/spraguehouse/release-damnit/internal/git"
 	"github.com/spraguehouse/release-damnit/internal/release"
 )
 
@@ -98,12 +97,16 @@ func main() {
 		// Create GitHub releases if requested
 		if *createReleases {
 			fmt.Println("\nCreating GitHub releases...")
-			for _, rel := range result.Releases {
-				if err := createGitHubRelease(repoPath, rel); err != nil {
-					fmt.Fprintf(os.Stderr, "Warning: Failed to create release for %s: %v\n", rel.Package.Component, err)
-				} else {
-					fmt.Printf("  Created release %s-v%s\n", rel.Package.Component, rel.NewVersion)
-				}
+			ghOpts := &release.GitHubReleaseOptions{
+				RepoPath: repoPath,
+				DryRun:   false,
+			}
+			ghReleases, err := release.CreateGitHubReleases(result, ghOpts)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Warning: %v\n", err)
+			}
+			for _, ghRel := range ghReleases {
+				fmt.Printf("  Created release %s\n", ghRel.TagName)
 			}
 		}
 	}
@@ -185,54 +188,6 @@ func detectRepoURL(repoPath string) string {
 	url = strings.TrimSuffix(url, ".git")
 
 	return url
-}
-
-func createGitHubRelease(repoPath string, rel *release.PackageRelease) error {
-	tagName := fmt.Sprintf("%s-v%s", rel.Package.Component, rel.NewVersion)
-	title := fmt.Sprintf("%s v%s", rel.Package.Component, rel.NewVersion)
-
-	// Build release notes from commits
-	var notes strings.Builder
-	notes.WriteString(fmt.Sprintf("## %s\n\n", title))
-
-	features := filterCommitsByType(rel.Commits, "feat")
-	fixes := filterCommitsByType(rel.Commits, "fix")
-
-	if len(features) > 0 {
-		notes.WriteString("### Features\n\n")
-		for _, c := range features {
-			notes.WriteString(fmt.Sprintf("* %s (%s)\n", c.Description, c.ShortSHA))
-		}
-		notes.WriteString("\n")
-	}
-
-	if len(fixes) > 0 {
-		notes.WriteString("### Bug Fixes\n\n")
-		for _, c := range fixes {
-			notes.WriteString(fmt.Sprintf("* %s (%s)\n", c.Description, c.ShortSHA))
-		}
-	}
-
-	// Create release using gh CLI
-	cmd := exec.Command("gh", "release", "create", tagName,
-		"--title", title,
-		"--notes", notes.String(),
-		"--target", "HEAD")
-	cmd.Dir = repoPath
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-
-	return cmd.Run()
-}
-
-func filterCommitsByType(commits []*git.Commit, commitType string) []*git.Commit {
-	var result []*git.Commit
-	for _, c := range commits {
-		if c.Type == commitType {
-			result = append(result, c)
-		}
-	}
-	return result
 }
 
 func writeGitHubOutput(result *release.AnalysisResult) {

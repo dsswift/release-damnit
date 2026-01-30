@@ -59,10 +59,16 @@
 - [x] **BLOG**: Update with GitHub Action packaging experience
 
 ## Phase 6: sh-monorepo Integration
-- [ ] Create sh-monorepo/docs/standards/gitops.md
-- [ ] Update ADR-009
-- [ ] Update .github/workflows/release.yml
+- [x] Create sh-monorepo/docs/standards/gitops.md
+  - Documents simplified workflow with release-damnit
+- [x] Update ADR-009
+  - Added "Alternative: release-damnit" section
+- [x] Create .github/workflows/release-damnit.yml (draft)
+  - Parallel workflow to test without disrupting existing release-please.yml
+  - Uses spraguehouse/release-damnit@main action
 - [ ] Test with real feature→main merge
+  - Requires disabling release-please.yml temporarily
+  - Manual testing step
 - [ ] Verify targeted builds work
 
 ## Phase 7: Release

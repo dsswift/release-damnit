@@ -53,9 +53,9 @@
 - [x] internal/release - tests
   - internal/release/github_test.go: comprehensive unit tests
 - [x] action.yml - composite action wrapper
-- [x] E2E test: GitHub release flow (dry-run mode)
-  - TestE2E_CreateGitHubReleases_DryRun, TestE2E_BuildGitHubRelease
-  - Note: actual release creation skipped - local commits don't exist on remote
+- [x] E2E test: GitHub release flow (real releases)
+  - TestE2E_FullGitHubReleaseFlow, TestE2E_MultiServiceGitHubReleases
+  - Tests push to timestamped branches on origin, create real releases, verify via gh CLI, cleanup
 - [x] **BLOG**: Update with GitHub Action packaging experience
 
 ## Phase 6: sh-monorepo Integration

@@ -14,6 +14,7 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
@@ -75,6 +76,12 @@ func main() {
 	// Print analysis results
 	printAnalysis(result)
 
+	// Output for GitHub Actions (always output, even with no releases)
+	// This ensures downstream jobs can safely call fromJSON on release_report
+	if os.Getenv("GITHUB_OUTPUT") != "" {
+		writeGitHubOutput(result, *repoURL)
+	}
+
 	if len(result.Releases) == 0 {
 		fmt.Println("\nNo releasable changes.")
 		os.Exit(0)
@@ -111,10 +118,6 @@ func main() {
 		}
 	}
 
-	// Output for GitHub Actions
-	if os.Getenv("GITHUB_OUTPUT") != "" {
-		writeGitHubOutput(result)
-	}
 }
 
 func printHelp() {
@@ -190,7 +193,7 @@ func detectRepoURL(repoPath string) string {
 	return url
 }
 
-func writeGitHubOutput(result *release.AnalysisResult) {
+func writeGitHubOutput(result *release.AnalysisResult, repoURL string) {
 	outputFile := os.Getenv("GITHUB_OUTPUT")
 	if outputFile == "" {
 		return
@@ -203,14 +206,32 @@ func writeGitHubOutput(result *release.AnalysisResult) {
 	}
 	defer f.Close()
 
-	// releases_created
+	// releases_created (simple boolean for quick checks)
 	if len(result.Releases) > 0 {
 		fmt.Fprintln(f, "releases_created=true")
 	} else {
 		fmt.Fprintln(f, "releases_created=false")
 	}
 
-	// Per-component outputs
+	// Build and output release_report JSON
+	releaseReport := release.BuildReleaseReport(result, repoURL)
+	releaseReportJSON, err := json.Marshal(releaseReport)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: Failed to marshal release_report: %v\n", err)
+	} else {
+		fmt.Fprintf(f, "release_report=%s\n", string(releaseReportJSON))
+	}
+
+	// Build and output analysis_input JSON
+	analysisInput := release.BuildAnalysisInput(result)
+	analysisInputJSON, err := json.Marshal(analysisInput)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: Failed to marshal analysis_input: %v\n", err)
+	} else {
+		fmt.Fprintf(f, "analysis_input=%s\n", string(analysisInputJSON))
+	}
+
+	// Per-component outputs (backward compatibility)
 	for _, rel := range result.Releases {
 		component := rel.Package.Component
 		fmt.Fprintf(f, "%s--release_created=true\n", component)

@@ -26,8 +26,14 @@ inputs:
 
 outputs:
   releases_created:
-    description: 'Whether any releases were created'
+    description: 'Whether any releases were created (true/false)'
     value: ${{ steps.release.outputs.releases_created }}
+  release_report:
+    description: 'Comprehensive JSON release report with components array, release details, and summary'
+    value: ${{ steps.release.outputs.release_report }}
+  analysis_input:
+    description: 'JSON of input data used for release decisions (commits, files, config)'
+    value: ${{ steps.release.outputs.analysis_input }}
 
 runs:
   using: 'composite'

@@ -5,14 +5,18 @@
 // GitHub repository. These tests require network access and GitHub authentication.
 //
 // Run with: go test -tags=e2e ./e2e/...
+//
+// The mock repo can be reset to a clean state with: ./scripts/setup-mock-repo.sh
 package e2e
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/spraguehouse/release-damnit/internal/release"
 )
@@ -47,6 +51,13 @@ func runCmd(t *testing.T, dir string, name string, args ...string) string {
 		t.Fatalf("command %s %v failed: %v\n%s", name, args, err, out)
 	}
 	return string(out)
+}
+
+// runCmdIgnoreError runs a command and ignores errors (for cleanup).
+func runCmdIgnoreError(dir string, name string, args ...string) {
+	cmd := exec.Command(name, args...)
+	cmd.Dir = dir
+	_ = cmd.Run()
 }
 
 // TestE2E_AnalyzeMockRepo verifies we can analyze the mock repo structure.
@@ -316,15 +327,30 @@ func TestE2E_DryRunMakesNoChanges(t *testing.T) {
 	}
 }
 
-// TestE2E_CreateGitHubReleases_DryRun tests creating GitHub releases in dry-run mode.
-// This test verifies the release creation logic without actually creating releases.
-// Actual release creation is not tested in E2E because:
-// - Local commits don't exist on remote, causing GitHub API errors
-// - Creating real releases would pollute the mock repo
-func TestE2E_CreateGitHubReleases_DryRun(t *testing.T) {
+// TestE2E_FullGitHubReleaseFlow tests the complete flow including pushing to GitHub
+// and creating real GitHub releases. This is the true end-to-end test.
+//
+// This test:
+// 1. Clones the mock repo
+// 2. Merges a feature branch
+// 3. Applies version updates
+// 4. Commits and pushes to a test branch
+// 5. Creates real GitHub releases
+// 6. Verifies releases exist on GitHub
+// 7. Cleans up releases and test branch
+func TestE2E_FullGitHubReleaseFlow(t *testing.T) {
+	// Check if gh CLI is authenticated
+	if err := release.CheckGHCLI(); err != nil {
+		t.Fatalf("gh CLI not authenticated: %v", err)
+	}
+
 	dir := cloneMockRepo(t)
 
-	// Merge feature branch
+	// Create a unique test branch to avoid conflicts with parallel tests
+	testBranch := fmt.Sprintf("test-release-%d", time.Now().UnixNano())
+	runCmd(t, dir, "git", "checkout", "-b", testBranch)
+
+	// Merge feature/service-a-update with --no-ff
 	runCmd(t, dir, "git", "merge", "--no-ff", "origin/feature/service-a-update", "-m", "Merge feature/service-a-update")
 
 	// Analyze
@@ -340,77 +366,103 @@ func TestE2E_CreateGitHubReleases_DryRun(t *testing.T) {
 		t.Fatalf("Analyze failed: %v", err)
 	}
 
-	// Apply changes to update VERSION files etc
+	// Apply version updates
 	if err := release.Apply(result, false); err != nil {
 		t.Fatalf("Apply failed: %v", err)
 	}
 
-	// Create GitHub releases in DRY RUN mode
+	// Commit the version changes
+	runCmd(t, dir, "git", "add", "-A")
+	runCmd(t, dir, "git", "commit", "-m", "chore: release versions")
+
+	// Push to the test branch on origin
+	runCmd(t, dir, "git", "push", "-u", "origin", testBranch)
+
+	// Track created releases for cleanup
+	var createdTags []string
+	defer func() {
+		// Cleanup: delete releases and test branch
+		for _, tag := range createdTags {
+			t.Logf("Cleaning up release: %s", tag)
+			runCmdIgnoreError(dir, "gh", "release", "delete", tag, "--yes", "--cleanup-tag")
+		}
+		t.Logf("Cleaning up branch: %s", testBranch)
+		runCmdIgnoreError(dir, "git", "push", "origin", "--delete", testBranch)
+	}()
+
+	// Create GitHub releases
 	ghOpts := &release.GitHubReleaseOptions{
 		RepoPath: dir,
-		DryRun:   true, // Don't actually create releases
+		DryRun:   false,
 	}
 
 	ghReleases, err := release.CreateGitHubReleases(result, ghOpts)
 	if err != nil {
-		t.Fatalf("CreateGitHubReleases (dry-run) failed: %v", err)
+		t.Fatalf("CreateGitHubReleases failed: %v", err)
 	}
 
-	// Verify releases were prepared
-	if len(ghReleases) != 2 {
-		t.Fatalf("expected 2 releases, got %d", len(ghReleases))
-	}
-
-	// Verify release data
-	var hasFeatureSection bool
+	// Track releases for cleanup
 	for _, ghRel := range ghReleases {
-		if ghRel.TagName == "" {
-			t.Error("release should have tag name")
+		createdTags = append(createdTags, ghRel.TagName)
+	}
+
+	// Verify we created the expected number of releases
+	if len(ghReleases) != 2 {
+		t.Fatalf("expected 2 releases (service-a and service-b linked), got %d", len(ghReleases))
+	}
+
+	// Verify each release exists on GitHub
+	for _, ghRel := range ghReleases {
+		t.Logf("Verifying release: %s", ghRel.TagName)
+
+		// Use gh CLI to verify the release exists
+		cmd := exec.Command("gh", "release", "view", ghRel.TagName, "--json", "tagName,name")
+		cmd.Dir = dir
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Errorf("release %s not found on GitHub: %v\n%s", ghRel.TagName, err, out)
+			continue
 		}
-		if ghRel.Title == "" {
-			t.Error("release should have title")
+
+		// Verify the release has the expected tag name
+		if !strings.Contains(string(out), ghRel.TagName) {
+			t.Errorf("release %s: unexpected response: %s", ghRel.TagName, out)
 		}
+	}
+
+	// Verify release notes content
+	for _, ghRel := range ghReleases {
 		if ghRel.Notes == "" {
-			t.Error("release should have notes")
+			t.Errorf("release %s has empty notes", ghRel.TagName)
 		}
 		if !strings.Contains(ghRel.Notes, "## ") {
-			t.Error("release notes should have version header")
-		}
-		// Track if any release has a Features section
-		// (linked packages without commits won't have this section)
-		if strings.Contains(ghRel.Notes, "Features") {
-			hasFeatureSection = true
+			t.Errorf("release %s notes missing version header", ghRel.TagName)
 		}
 	}
-	// At least one release should have a Features section (service-a has feat commits)
-	if !hasFeatureSection {
-		t.Error("at least one release should have Features section")
-	}
+
+	t.Logf("Successfully created and verified %d GitHub releases", len(ghReleases))
 }
 
-// TestE2E_CheckGHCLI verifies the gh CLI check works.
-func TestE2E_CheckGHCLI(t *testing.T) {
-	// This test just verifies CheckGHCLI doesn't panic
-	// It may or may not be authenticated depending on the environment
-	err := release.CheckGHCLI()
-	if err != nil {
-		t.Logf("gh CLI not authenticated: %v (this is OK for E2E testing)", err)
-	} else {
-		t.Log("gh CLI is authenticated")
+// TestE2E_MultiServiceGitHubReleases tests creating releases for multiple services.
+func TestE2E_MultiServiceGitHubReleases(t *testing.T) {
+	// Check if gh CLI is authenticated
+	if err := release.CheckGHCLI(); err != nil {
+		t.Fatalf("gh CLI not authenticated: %v", err)
 	}
-}
 
-// TestE2E_BuildGitHubRelease tests building release data without creating actual releases.
-func TestE2E_BuildGitHubRelease(t *testing.T) {
 	dir := cloneMockRepo(t)
 
-	// Merge feature branch
-	runCmd(t, dir, "git", "merge", "--no-ff", "origin/feature/service-a-update", "-m", "Merge feature/service-a-update")
+	// Create a unique test branch
+	testBranch := fmt.Sprintf("test-multi-%d", time.Now().UnixNano())
+	runCmd(t, dir, "git", "checkout", "-b", testBranch)
+
+	// Merge feature/multi-service with --no-ff
+	runCmd(t, dir, "git", "merge", "--no-ff", "origin/feature/multi-service", "-m", "Merge feature/multi-service")
 
 	// Analyze
 	opts := &release.Options{
 		RepoPath:             dir,
-		DryRun:               true,
+		DryRun:               false,
 		RepoURL:              "https://github.com/spraguehouse/mock--gitops-playground",
 		TreatPreMajorAsMinor: true,
 	}
@@ -420,33 +472,78 @@ func TestE2E_BuildGitHubRelease(t *testing.T) {
 		t.Fatalf("Analyze failed: %v", err)
 	}
 
-	// Build release data (dry run)
-	for _, rel := range result.Releases {
-		ghRelease := release.BuildGitHubRelease(rel, opts.RepoURL)
+	// Apply version updates
+	if err := release.Apply(result, false); err != nil {
+		t.Fatalf("Apply failed: %v", err)
+	}
 
-		// Verify tag format
-		expectedTag := rel.Package.Component + "-v" + rel.NewVersion
-		if ghRelease.TagName != expectedTag {
-			t.Errorf("expected tag %s, got %s", expectedTag, ghRelease.TagName)
-		}
+	// Commit and push
+	runCmd(t, dir, "git", "add", "-A")
+	runCmd(t, dir, "git", "commit", "-m", "chore: release versions")
+	runCmd(t, dir, "git", "push", "-u", "origin", testBranch)
 
-		// Verify title format
-		expectedTitle := rel.Package.Component + " v" + rel.NewVersion
-		if ghRelease.Title != expectedTitle {
-			t.Errorf("expected title %s, got %s", expectedTitle, ghRelease.Title)
+	// Track created releases for cleanup
+	var createdTags []string
+	defer func() {
+		for _, tag := range createdTags {
+			t.Logf("Cleaning up release: %s", tag)
+			runCmdIgnoreError(dir, "gh", "release", "delete", tag, "--yes", "--cleanup-tag")
 		}
+		t.Logf("Cleaning up branch: %s", testBranch)
+		runCmdIgnoreError(dir, "git", "push", "origin", "--delete", testBranch)
+	}()
 
-		// Verify notes content
-		if !strings.Contains(ghRelease.Notes, "## "+rel.Package.Component) {
-			t.Error("notes should have component in header")
-		}
-		if !strings.Contains(ghRelease.Notes, rel.NewVersion) {
-			t.Error("notes should contain new version")
-		}
+	// Create GitHub releases
+	ghOpts := &release.GitHubReleaseOptions{
+		RepoPath: dir,
+		DryRun:   false,
+	}
 
-		// Check for compare link
-		if !strings.Contains(ghRelease.Notes, "Full Changelog") {
-			t.Error("notes should have Full Changelog link")
+	ghReleases, err := release.CreateGitHubReleases(result, ghOpts)
+	if err != nil {
+		t.Fatalf("CreateGitHubReleases failed: %v", err)
+	}
+
+	// Track releases for cleanup
+	for _, ghRel := range ghReleases {
+		createdTags = append(createdTags, ghRel.TagName)
+	}
+
+	// Should have 4 releases (service-a, service-b linked, plus service-c, shared)
+	if len(ghReleases) != 4 {
+		t.Fatalf("expected 4 releases, got %d", len(ghReleases))
+	}
+
+	// Verify all releases exist on GitHub
+	for _, ghRel := range ghReleases {
+		cmd := exec.Command("gh", "release", "view", ghRel.TagName, "--json", "tagName")
+		cmd.Dir = dir
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Errorf("release %s not found on GitHub: %v\n%s", ghRel.TagName, err, out)
 		}
 	}
+
+	// Check that the right components were released
+	components := make(map[string]bool)
+	for _, ghRel := range ghReleases {
+		components[ghRel.PackageInfo.Package.Component] = true
+	}
+
+	expectedComponents := []string{"service-a", "service-b", "service-c", "shared"}
+	for _, comp := range expectedComponents {
+		if !components[comp] {
+			t.Errorf("missing release for component: %s", comp)
+		}
+	}
+
+	t.Logf("Successfully created and verified %d GitHub releases", len(ghReleases))
+}
+
+// TestE2E_CheckGHCLI verifies the gh CLI check works.
+func TestE2E_CheckGHCLI(t *testing.T) {
+	err := release.CheckGHCLI()
+	if err != nil {
+		t.Fatalf("gh CLI not authenticated - E2E tests require authentication: %v", err)
+	}
+	t.Log("gh CLI is authenticated")
 }

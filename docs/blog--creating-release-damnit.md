@@ -104,8 +104,6 @@ I could submit a PR to Release Please. But:
 
 Starting with documentation forces clarity. Writing ADRs for language choice and testing strategy before writing code ensures I actually think through the decisions instead of coding by instinct.
 
-The todo.md file is the master checklist. Each item gets marked in progress, then complete. If something unexpected happens, it gets a note. Otherwise, just check the box and move on.
-
 ### Phase 2: Test Infrastructure
 
 The testing strategy has three tiers:
@@ -188,12 +186,42 @@ perfs := filterCommitsByType(rel.Commits, "perf")
 
 **Linked packages need special handling in release notes.** When service-a and service-b are linked but only service-a was touched, service-b gets a version bump but has no commits to document. The release notes for service-b are essentially empty (just the header). This is correct - the version bump is for synchronization, not because something changed in service-b.
 
-**E2E testing for actual release creation is tricky.** The original plan was to create real GitHub releases in the mock repo during E2E tests. But this fails because:
-1. Local commits in a temp clone don't exist on the remote
-2. GitHub's API rejects `--target <sha>` when the SHA doesn't exist on the remote
-3. Creating real releases would pollute the mock repo with test artifacts
+**E2E testing requires real GitHub releases.** The mock repo exists precisely for this - a dedicated test environment where we can create real branches, push real commits, and create real releases. The key insight: clone the mock repo, create a timestamped test branch, merge feature branches, push to origin, then create releases against commits that actually exist on the remote.
 
-The solution: test release data building thoroughly (unit tests), test the full analysis-to-release-prep flow (E2E with dry-run), and trust the gh CLI for the actual API call. The gh CLI is well-tested - we don't need to verify it creates releases correctly.
+```go
+// Create unique test branch to avoid collisions
+testBranch := fmt.Sprintf("test-release-%d", time.Now().UnixNano())
+runCmd(t, dir, "git", "checkout", "-b", testBranch)
+runCmd(t, dir, "git", "merge", "--no-ff", "origin/feature/service-a-update", "-m", "Merge feature")
+// ... analyze and apply version bumps ...
+runCmd(t, dir, "git", "push", "-u", "origin", testBranch)
+// Now create real GitHub releases - commits exist on remote
+releases, err := release.CreateGitHubReleases(result, opts)
+```
+
+**Cleanup is essential.** Tests run in a `defer` block that deletes all created releases and the test branch:
+
+```go
+defer func() {
+    for _, tag := range createdTags {
+        runCmdIgnoreError(dir, "gh", "release", "delete", tag, "--yes", "--cleanup-tag")
+    }
+    runCmdIgnoreError(dir, "git", "push", "origin", "--delete", testBranch)
+}()
+```
+
+The mock repo stays clean between test runs. If anything goes wrong, the `reset-mock-repo.sh` script restores the baseline state.
+
+**Verification uses the gh CLI.** After creating releases, we verify they exist:
+
+```go
+output, err := exec.Command("gh", "release", "view", tag, "-R", repoURL).Output()
+if err != nil {
+    t.Fatalf("Release %s not found on GitHub: %v", tag, err)
+}
+```
+
+This confirms the full flow works end-to-end: merge detection → commit analysis → version bumping → file updates → GitHub release creation. No shortcuts, no mocking the final step.
 
 **The GitHub Action wrapper was simple.** `action.yml` is a composite action that:
 1. Sets up Go 1.22

@@ -202,6 +202,34 @@ The solution: test release data building thoroughly (unit tests), test the full 
 
 Building from source in CI means no binary distribution headaches (which architecture? which OS?). Go compiles fast enough that this doesn't noticeably impact CI times.
 
+### Phase 6: sh-monorepo Integration
+
+**Documentation first, migration second.** Before switching the production workflow, I created:
+- `docs/standards/gitops.md` - The new simplified workflow documentation
+- ADR-009 update - Documenting release-damnit as an alternative to the cherry-pick workflow
+
+**The workflow change is additive.** Rather than replacing `release-please.yml`, I created `release-damnit.yml` as a parallel workflow. This allows testing the new tool without disrupting the existing release pipeline. The workflow has:
+- Same path triggers as the existing workflow
+- Same build jobs for each package
+- Same manifest update and ArgoCD sync steps
+- A `dry_run` input for safe testing
+
+**The integration point is clean.** The release-damnit action:
+1. Analyzes HEAD for merge commits
+2. Updates VERSION/CHANGELOG files
+3. Creates GitHub releases
+4. Outputs which packages were released
+
+The downstream build jobs check these outputs (`jarvis--release_created`, etc.) to decide whether to build.
+
+**Real testing is still needed.** The documentation and workflow are ready, but the actual proof is merging a feature branch to main and verifying all packages are detected correctly. This requires:
+1. Temporarily disabling `release-please.yml`
+2. Creating a feature branch with changes to multiple packages
+3. Merging to main with `--no-ff`
+4. Verifying VERSION bumps are correct
+
+This is a manual validation step that I'll do before Phase 7 (final release).
+
 ---
 
-*More updates to come as the build progresses...*
+*Final update coming in Phase 7 after production testing...*

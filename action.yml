@@ -1,0 +1,64 @@
+name: 'release-damnit'
+description: 'Drop-in replacement for Release Please with correct merge commit traversal'
+author: 'Sprague House'
+
+branding:
+  icon: 'tag'
+  color: 'blue'
+
+inputs:
+  token:
+    description: 'GitHub token for creating releases'
+    required: false
+    default: ${{ github.token }}
+  dry-run:
+    description: 'Only show what would change, do not make changes'
+    required: false
+    default: 'false'
+  create-releases:
+    description: 'Create GitHub releases'
+    required: false
+    default: 'true'
+  repo-url:
+    description: 'GitHub repository URL (auto-detected if not provided)'
+    required: false
+    default: ''
+
+outputs:
+  releases_created:
+    description: 'Whether any releases were created'
+    value: ${{ steps.release.outputs.releases_created }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Setup Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.22'
+        cache: false
+
+    - name: Build release-damnit
+      shell: bash
+      run: |
+        cd ${{ github.action_path }}
+        go build -o release-damnit ./cmd/release-damnit
+
+    - name: Run release-damnit
+      id: release
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.token }}
+      run: |
+        FLAGS=""
+        if [ "${{ inputs.dry-run }}" = "true" ]; then
+          FLAGS="$FLAGS --dry-run"
+        fi
+        if [ "${{ inputs.create-releases }}" = "true" ]; then
+          FLAGS="$FLAGS --create-releases"
+        fi
+        if [ -n "${{ inputs.repo-url }}" ]; then
+          FLAGS="$FLAGS --repo-url ${{ inputs.repo-url }}"
+        fi
+
+        ${{ github.action_path }}/release-damnit $FLAGS

@@ -38,9 +38,14 @@
 - [x] cmd/release-damnit/main.go - CLI entrypoint
 - [x] Wire up config → git → version → changelog
 - [x] --dry-run flag
-- [ ] Integration tests against temp repos
-- [ ] E2E tests against mock--gitops-playground
-- [ ] **BLOG**: Update with CLI design decisions, test results
+- [x] Integration tests against temp repos
+  - TestAnalyze_NonMergeCommit, TestAnalyze_MergeCommit, TestAnalyze_MultiplePackages
+  - TestAnalyze_LinkedVersions, TestAnalyze_NoReleasableCommits, TestApply_UpdatesFiles
+- [x] E2E tests against mock--gitops-playground
+  - TestE2E_AnalyzeMockRepo, TestE2E_MergeFeatureBranch, TestE2E_MergeMultiServiceBranch
+  - TestE2E_ApplyAndVerify, TestE2E_DryRunMakesNoChanges
+- [x] **BLOG**: Update with CLI design decisions, test results
+  - Documented edge cases: single-commit repos, linked packages with no commits
 
 ## Phase 5: GitHub Integration
 - [ ] internal/release - create GitHub releases via gh CLI

@@ -154,6 +154,25 @@ var conventionalCommitRegex = regexp.MustCompile(
 
 **Edge case: linked versions.** Some packages should always have the same version (like `ma-observe-client` and `ma-observe-server`). The config tracks these groups, and when calculating bumps, we find the highest bump across all linked packages and apply it to all of them.
 
+### Phase 4: CLI Integration & Testing
+
+**The CLI wiring was straightforward.** The `cmd/release-damnit/main.go` file parses flags, calls `Analyze()`, prints results, and calls `Apply()` if not in dry-run mode. The `--dry-run` flag is essential for CI debugging.
+
+**Integration tests uncovered two edge cases:**
+
+1. **Single-commit repos fail on `HEAD~1`.** When a repo has only one commit, `git log HEAD~1..HEAD` fails because `HEAD~1` doesn't exist. Fixed by catching the error and returning empty commits instead of failing.
+
+2. **Linked packages with no direct commits.** When service-a and service-b are linked, and only service-a is touched, service-b still needs to bump but has no commits. The original code tried to generate a changelog with zero commits, which panicked. Fixed by skipping changelog generation for packages with no commits - they still get version bumps, just no changelog entries.
+
+**E2E tests against the real mock repo caught real issues.** The test suite:
+- Clones `mock--gitops-playground` to a temp dir
+- Merges feature branches with `--no-ff`
+- Runs analysis and verifies commit counts, bump types, version numbers
+- Tests `Apply()` and verifies VERSION files, CHANGELOGs, and manifest are updated correctly
+- Verifies dry-run makes no changes
+
+**The test pyramid worked.** Unit tests caught logic bugs fast. Integration tests (with temp git repos) verified git traversal. E2E tests (with the real GitHub repo) verified the full flow including linked versions across multiple packages.
+
 ---
 
 *More updates to come as the build progresses...*

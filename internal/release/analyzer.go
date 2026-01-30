@@ -86,9 +86,11 @@ func Analyze(opts *Options) (*AnalysisResult, error) {
 		}
 	} else {
 		// Fall back to HEAD~1..HEAD for non-merge commits
+		// This may fail if there's only one commit in the repo
 		commits, err = git.GetCommitsInRange(opts.RepoPath, "HEAD~1", "HEAD")
 		if err != nil {
-			return nil, fmt.Errorf("failed to get commits: %w", err)
+			// If HEAD~1 doesn't exist (single commit repo), return empty commits
+			commits = nil
 		}
 	}
 
@@ -285,6 +287,12 @@ func updateVersionFile(path, newVersion string) error {
 
 // updateChangelog updates a CHANGELOG.md file with a new entry.
 func updateChangelog(path string, rel *PackageRelease, compareURL, repoURL string) error {
+	// Skip changelog update if there are no commits
+	// This can happen for linked packages that weren't directly modified
+	if len(rel.Commits) == 0 {
+		return nil
+	}
+
 	// Read existing content
 	existing, err := os.ReadFile(path)
 	if err != nil {

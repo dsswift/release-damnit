@@ -59,17 +59,19 @@
   - 8 packages: jarvis, jarvis-web, jarvis-discord, ma-observe-client/server, sandbox-portal, sandbox-image-claude-code, infrastructure
   - Nested packages (jarvis/clients/web), linked versions (ma-observe)
   - .github/workflows/release-damnit.yml included
-- [x] 6 scenario tests covering all release patterns:
+- [x] 7 scenario tests covering all release patterns:
   - TestE2E_Scenario_SingleFeat: Single feat → jarvis 0.1.1
   - TestE2E_Scenario_MultiPackage: 3 packages bumped
   - TestE2E_Scenario_BreakingChange: feat! → major bump to 1.0.0
   - TestE2E_Scenario_LinkedVersions: Change to client → both client+server bump
   - TestE2E_Scenario_StackedCommits: 4 commits (chore, fix, feat, fix) → feat wins
   - TestE2E_Scenario_NestedPackage: jarvis/clients/web → jarvis-web (not jarvis)
-- [x] 3 full GitHub release flow tests with real releases:
+  - TestE2E_Scenario_ComplexMerge: "Kitchen sink" - ALL 8 packages bumped in single merge
+- [x] 4 full GitHub release flow tests with real releases:
   - TestE2E_FullGitHubReleaseFlow_SingleFeat
   - TestE2E_FullGitHubReleaseFlow_LinkedVersions
   - TestE2E_FullGitHubReleaseFlow_MultiPackage
+  - TestE2E_FullGitHubReleaseFlow_ComplexMerge: 11 commits → 8 releases (linked, nested, breaking)
 
 ## Phase 6: sh-monorepo Integration
 - [x] Create sh-monorepo/docs/standards/gitops.md

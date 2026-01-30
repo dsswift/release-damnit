@@ -484,6 +484,84 @@ git commit -m "feat(jarvis-web): add notification component"
 git checkout main
 
 # =============================================================================
+# Feature branch: complex-merge (the "kitchen sink" test)
+# Tests ALL package types in a single merge:
+# - Simple scopes: jarvis, sandbox-portal, infrastructure, sandbox-image-claude-code
+# - Linked scopes: ma-observe-client (triggers ma-observe-server)
+# - Nested scopes: jarvis-web, jarvis-discord (both nested inside jarvis)
+# - Multiple commit types: feat, fix, chore, feat! (breaking)
+# - Stacked commits: Multiple commits to same package
+#
+# Expected results (8 packages total):
+# - jarvis: 0.1.0 → 0.1.1 (feat)
+# - jarvis-web: 0.1.0 → 0.1.1 (feat wins over fix)
+# - jarvis-discord: 0.1.0 → 0.1.1 (fix)
+# - ma-observe-client: 0.1.0 → 0.1.1 (feat)
+# - ma-observe-server: 0.1.0 → 0.1.1 (linked, no direct commits)
+# - sandbox-portal: 0.1.0 → 1.0.0 (feat! breaking)
+# - sandbox-image-claude-code: 0.1.0 → 0.1.1 (feat)
+# - infrastructure: 0.1.0 → 0.1.1 (fix)
+# =============================================================================
+
+git checkout -b feature/complex-merge
+
+# --- jarvis (simple scope, multiple commits) ---
+echo "// Add recipe feature" >> workloads/jarvis/backend/src/main.go
+git add workloads/jarvis/backend/src/main.go
+git commit -m "feat(jarvis): add recipe recommendation engine"
+
+echo "// Fix recipe bug" >> workloads/jarvis/backend/src/main.go
+git add workloads/jarvis/backend/src/main.go
+git commit -m "fix(jarvis): handle missing ingredients gracefully"
+
+# --- jarvis-web (nested scope, stacked commits - feat wins) ---
+echo "// Fix button styling" >> workloads/jarvis/clients/web/src/App.tsx
+git add workloads/jarvis/clients/web/src/App.tsx
+git commit -m "fix(jarvis-web): fix button alignment on mobile"
+
+echo "// Add dark mode" >> workloads/jarvis/clients/web/src/App.tsx
+git add workloads/jarvis/clients/web/src/App.tsx
+git commit -m "feat(jarvis-web): add dark mode support"
+
+echo "// Cleanup imports" >> workloads/jarvis/clients/web/src/App.tsx
+git add workloads/jarvis/clients/web/src/App.tsx
+git commit -m "chore(jarvis-web): cleanup unused imports"
+
+# --- jarvis-discord (nested scope, single fix) ---
+echo "// Handle rate limit" >> workloads/jarvis/clients/discord/src/bot.ts
+git add workloads/jarvis/clients/discord/src/bot.ts
+git commit -m "fix(jarvis-discord): handle Discord API rate limits"
+
+# --- ma-observe-client (linked scope - should trigger server bump too) ---
+echo "// Add new metric type" >> workloads/ma-observe/client/src/client.go
+git add workloads/ma-observe/client/src/client.go
+git commit -m "feat(ma-observe-client): add CPU temperature metric"
+
+echo "// Fix metric parsing" >> workloads/ma-observe/client/src/client.go
+git add workloads/ma-observe/client/src/client.go
+git commit -m "fix(ma-observe-client): fix metric timestamp parsing"
+
+# --- sandbox-portal (breaking change - major bump) ---
+echo "// BREAKING: New API v2" >> platforms/sandbox/portal/src/main.py
+git add platforms/sandbox/portal/src/main.py
+git commit -m "feat(sandbox-portal)!: redesign REST API with v2 schema
+
+BREAKING CHANGE: All API endpoints now use /api/v2 prefix.
+Old /api/v1 endpoints are removed."
+
+# --- sandbox-image-claude-code (simple scope) ---
+echo "RUN apt-get update" >> platforms/sandbox/images/claude-code/Dockerfile
+git add platforms/sandbox/images/claude-code/Dockerfile
+git commit -m "feat(sandbox-image-claude-code): add system package updates"
+
+# --- infrastructure (simple scope, fix only) ---
+echo "# Fix module path" >> infrastructure/terraform/modules/README.md
+git add infrastructure/terraform/modules/README.md
+git commit -m "fix(infrastructure): correct module source path"
+
+git checkout main
+
+# =============================================================================
 # Push all branches
 # =============================================================================
 
@@ -497,6 +575,7 @@ git push --force origin feature/breaking-change
 git push --force origin feature/linked-versions
 git push --force origin feature/stacked-commits
 git push --force origin feature/nested-package
+git push --force origin feature/complex-merge
 
 if [ "$LOCAL_MODE" = true ]; then
     echo ""
@@ -523,12 +602,16 @@ echo "  - platforms/sandbox/portal (sandbox-portal)"
 echo "  - platforms/sandbox/images/claude-code (sandbox-image-claude-code)"
 echo "  - infrastructure/terraform (infrastructure)"
 echo ""
-echo "Feature branches (6 scenarios):"
+echo "Feature branches (7 scenarios):"
 echo "  - feature/single-feat: 1 commit (feat) → jarvis minor bump"
 echo "  - feature/multi-package: 3 commits → jarvis, sandbox-portal, infrastructure minor bumps"
 echo "  - feature/breaking-change: 1 commit (feat!) → sandbox-portal MAJOR bump"
 echo "  - feature/linked-versions: 1 commit → ma-observe-client AND ma-observe-server minor bumps"
 echo "  - feature/stacked-commits: 4 commits (chore, fix, feat, fix) → jarvis-discord minor bump (feat wins)"
 echo "  - feature/nested-package: 1 commit → jarvis-web minor bump (not jarvis)"
+echo "  - feature/complex-merge: 12 commits → ALL 8 packages bumped (the \"kitchen sink\" test)"
+echo "      Simple: jarvis, sandbox-portal (MAJOR!), sandbox-image-claude-code, infrastructure"
+echo "      Linked: ma-observe-client + ma-observe-server (server has no direct commits)"
+echo "      Nested: jarvis-web (feat wins), jarvis-discord"
 echo ""
 echo "CI Pipeline: .github/workflows/release-damnit.yml"

@@ -360,6 +360,143 @@ func TestE2E_Scenario_NestedPackage(t *testing.T) {
 	}
 }
 
+// TestE2E_Scenario_ComplexMerge is the "kitchen sink" test.
+// It tests ALL package types in a single merge:
+// - Simple scopes: jarvis, sandbox-portal, infrastructure, sandbox-image-claude-code
+// - Linked scopes: ma-observe-client (triggers ma-observe-server with no direct commits)
+// - Nested scopes: jarvis-web (inside jarvis), jarvis-discord (inside jarvis)
+// - Multiple commit types: feat, fix, chore, feat! (breaking)
+// - Stacked commits: Multiple commits to same package where highest severity wins
+//
+// Expected: ALL 8 packages bumped, with sandbox-portal getting MAJOR bump
+func TestE2E_Scenario_ComplexMerge(t *testing.T) {
+	dir := cloneMockRepo(t)
+
+	// Merge feature/complex-merge to main with --no-ff
+	runCmd(t, dir, "git", "merge", "--no-ff", "origin/feature/complex-merge", "-m", "Merge feature/complex-merge")
+
+	// Analyze WITHOUT TreatPreMajorAsMinor to see the major bump on sandbox-portal
+	opts := &release.Options{
+		RepoPath:             dir,
+		DryRun:               true,
+		TreatPreMajorAsMinor: false,
+	}
+
+	result, err := release.Analyze(opts)
+	if err != nil {
+		t.Fatalf("Analyze failed: %v", err)
+	}
+
+	// Should be a merge commit
+	if !result.MergeInfo.IsMerge {
+		t.Error("expected merge commit")
+	}
+
+	// Should have 11 commits total
+	if len(result.Commits) != 11 {
+		t.Errorf("expected 11 commits, got %d", len(result.Commits))
+		for i, c := range result.Commits {
+			t.Logf("  commit %d: %s - %s", i, c.Type, c.Description)
+		}
+	}
+
+	// Should have 8 releases (ALL packages)
+	if len(result.Releases) != 8 {
+		t.Fatalf("expected 8 releases (all packages), got %d", len(result.Releases))
+	}
+
+	// Build a map of component -> release for easy checking
+	releases := make(map[string]*release.PackageRelease)
+	for _, rel := range result.Releases {
+		releases[rel.Package.Component] = rel
+	}
+
+	// Define expected outcomes for each package
+	// Note: With TreatPreMajorAsMinor: false, feat → minor bump (0.1.0 → 0.2.0)
+	expectedReleases := map[string]struct {
+		newVersion   string
+		bumpReason   string
+		hasCommits   bool
+	}{
+		"jarvis":                    {"0.2.0", "feat (minor bump)", true},
+		"jarvis-web":                {"0.2.0", "feat wins over fix and chore (minor bump)", true},
+		"jarvis-discord":            {"0.1.1", "fix only (patch bump)", true},
+		"ma-observe-client":         {"0.2.0", "feat wins over fix (minor bump)", true},
+		"ma-observe-server":         {"0.2.0", "linked (no direct commits)", false},
+		"sandbox-portal":            {"1.0.0", "feat! breaking (major bump)", true},
+		"sandbox-image-claude-code": {"0.2.0", "feat (minor bump)", true},
+		"infrastructure":            {"0.1.1", "fix (patch bump)", true},
+	}
+
+	// Verify each expected release
+	for component, expected := range expectedReleases {
+		rel, ok := releases[component]
+		if !ok {
+			t.Errorf("MISSING release for %s (%s)", component, expected.bumpReason)
+			continue
+		}
+
+		if rel.NewVersion != expected.newVersion {
+			t.Errorf("%s: expected %s (%s), got %s",
+				component, expected.newVersion, expected.bumpReason, rel.NewVersion)
+		}
+
+		// Verify linked package (ma-observe-server) has no direct commits
+		if component == "ma-observe-server" {
+			if len(rel.Commits) != 0 {
+				t.Errorf("ma-observe-server should have 0 direct commits (linked), got %d", len(rel.Commits))
+			}
+		}
+
+		t.Logf("✓ %s: %s → %s (%s)",
+			component, rel.OldVersion, rel.NewVersion, expected.bumpReason)
+	}
+
+	// Verify commit type distribution
+	typeCounts := make(map[string]int)
+	for _, c := range result.Commits {
+		typeCounts[c.Type]++
+	}
+
+	// Expected: 5 feat (including 1 breaking), 5 fix, 1 chore = 11 total
+	if typeCounts["feat"] != 5 {
+		t.Errorf("expected 5 feat commits, got %d", typeCounts["feat"])
+	}
+	if typeCounts["fix"] != 5 {
+		t.Errorf("expected 5 fix commits, got %d", typeCounts["fix"])
+	}
+	if typeCounts["chore"] != 1 {
+		t.Errorf("expected 1 chore commit, got %d", typeCounts["chore"])
+	}
+
+	// Verify breaking change was detected
+	breakingCount := 0
+	for _, c := range result.Commits {
+		if c.IsBreaking {
+			breakingCount++
+		}
+	}
+	if breakingCount != 1 {
+		t.Errorf("expected 1 breaking change commit, got %d", breakingCount)
+	}
+
+	// Verify nested package matching worked correctly
+	// jarvis-web commits should NOT appear in jarvis releases
+	jarvisRel := releases["jarvis"]
+	for _, c := range jarvisRel.Commits {
+		for _, f := range c.Files {
+			if strings.Contains(f, "clients/web") {
+				t.Errorf("jarvis release incorrectly contains jarvis-web commit: %s", c.Description)
+			}
+			if strings.Contains(f, "clients/discord") {
+				t.Errorf("jarvis release incorrectly contains jarvis-discord commit: %s", c.Description)
+			}
+		}
+	}
+
+	t.Logf("Complex merge test passed: 11 commits → 8 releases (including 1 linked, 1 major)")
+}
+
 // =============================================================================
 // Full GitHub Release Flow Tests
 // =============================================================================
@@ -632,6 +769,119 @@ func TestE2E_FullGitHubReleaseFlow_MultiPackage(t *testing.T) {
 	}
 
 	t.Logf("Created and verified %d GitHub releases for multi-package scenario", len(ghReleases))
+}
+
+// TestE2E_FullGitHubReleaseFlow_ComplexMerge is the ultimate stress test.
+// It creates 8 real GitHub releases from a single merge that touches all packages.
+func TestE2E_FullGitHubReleaseFlow_ComplexMerge(t *testing.T) {
+	if err := release.CheckGHCLI(); err != nil {
+		t.Fatalf("gh CLI not authenticated: %v", err)
+	}
+
+	dir := cloneMockRepo(t)
+
+	testBranch := fmt.Sprintf("test-complex-%d", time.Now().UnixNano())
+	runCmd(t, dir, "git", "checkout", "-b", testBranch)
+	runCmd(t, dir, "git", "merge", "--no-ff", "origin/feature/complex-merge", "-m", "Merge feature/complex-merge")
+
+	// Analyze WITHOUT TreatPreMajorAsMinor to get the major bump
+	opts := &release.Options{
+		RepoPath:             dir,
+		DryRun:               false,
+		RepoURL:              mockRepoHTTPS,
+		TreatPreMajorAsMinor: false,
+	}
+
+	result, err := release.Analyze(opts)
+	if err != nil {
+		t.Fatalf("Analyze failed: %v", err)
+	}
+
+	if err := release.Apply(result, false); err != nil {
+		t.Fatalf("Apply failed: %v", err)
+	}
+
+	runCmd(t, dir, "git", "add", "-A")
+	runCmd(t, dir, "git", "commit", "-m", "chore: release all packages")
+	runCmd(t, dir, "git", "push", "-u", "origin", testBranch)
+
+	var createdTags []string
+	defer func() {
+		for _, tag := range createdTags {
+			t.Logf("Cleaning up release: %s", tag)
+			runCmdIgnoreError(dir, "gh", "release", "delete", tag, "--yes", "--cleanup-tag")
+		}
+		t.Logf("Cleaning up branch: %s", testBranch)
+		runCmdIgnoreError(dir, "git", "push", "origin", "--delete", testBranch)
+	}()
+
+	ghOpts := &release.GitHubReleaseOptions{
+		RepoPath: dir,
+		DryRun:   false,
+	}
+
+	ghReleases, err := release.CreateGitHubReleases(result, ghOpts)
+	if err != nil {
+		t.Fatalf("CreateGitHubReleases failed: %v", err)
+	}
+
+	for _, ghRel := range ghReleases {
+		createdTags = append(createdTags, ghRel.TagName)
+	}
+
+	// Should have 8 releases (ALL packages)
+	if len(ghReleases) != 8 {
+		t.Fatalf("expected 8 releases (all packages), got %d", len(ghReleases))
+	}
+
+	// Define expected tags (feat → minor bump with TreatPreMajorAsMinor: false)
+	expectedTags := map[string]string{
+		"jarvis":                    "jarvis-v0.2.0",
+		"jarvis-web":                "jarvis-web-v0.2.0",
+		"jarvis-discord":            "jarvis-discord-v0.1.1", // fix only → patch
+		"ma-observe-client":         "ma-observe-client-v0.2.0",
+		"ma-observe-server":         "ma-observe-server-v0.2.0", // linked
+		"sandbox-portal":            "sandbox-portal-v1.0.0",    // MAJOR bump!
+		"sandbox-image-claude-code": "sandbox-image-claude-code-v0.2.0",
+		"infrastructure":            "infrastructure-v0.1.1", // fix only → patch
+	}
+
+	// Build map of created releases
+	createdReleases := make(map[string]string)
+	for _, ghRel := range ghReleases {
+		createdReleases[ghRel.PackageInfo.Package.Component] = ghRel.TagName
+	}
+
+	// Verify each expected release
+	for component, expectedTag := range expectedTags {
+		actualTag, ok := createdReleases[component]
+		if !ok {
+			t.Errorf("MISSING release for %s (expected %s)", component, expectedTag)
+			continue
+		}
+
+		if actualTag != expectedTag {
+			t.Errorf("%s: expected tag %s, got %s", component, expectedTag, actualTag)
+		}
+
+		// Verify it exists on GitHub
+		cmd := exec.Command("gh", "release", "view", actualTag, "--json", "tagName")
+		cmd.Dir = dir
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Errorf("release %s not found on GitHub: %v\n%s", actualTag, err, out)
+		} else {
+			t.Logf("✓ %s verified on GitHub", actualTag)
+		}
+	}
+
+	// Verify sandbox-portal got a major bump
+	if tag, ok := createdReleases["sandbox-portal"]; ok {
+		if !strings.Contains(tag, "v1.0.0") {
+			t.Errorf("sandbox-portal should have MAJOR bump (v1.0.0), got %s", tag)
+		}
+	}
+
+	t.Logf("Complex merge stress test passed: 11 commits → 8 GitHub releases (including 1 linked, 1 major)")
 }
 
 // =============================================================================

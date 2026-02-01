@@ -21,7 +21,7 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/spraguehouse/release-damnit/internal/release"
+	"github.com/dsswift/release-damnit/internal/release"
 )
 
 var (

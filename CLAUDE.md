@@ -1,20 +1,5 @@
 # release-damnit
 
-Check `./todo.md` for the implementation roadmap. Update each item's status:
-- `[ ]` pending
-- `[~]` in progress
-- `[x]` complete
-
-Add brief notes under items ONLY for unexpected issues or deviations.
-Do not add notes for successful completions.
-
-If interrupted with urgent work:
-1. Note current progress on the active item
-2. Clear in-progress marker
-3. Insert new item at current position (not at end)
-4. Complete inserted item first
-5. Resume original sequence
-
 ## Project Overview
 
 A drop-in replacement for Release Please that correctly traverses merge commits.

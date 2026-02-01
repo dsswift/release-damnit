@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/spraguehouse/release-damnit/internal/git"
+	"github.com/dsswift/release-damnit/internal/git"
 )
 
 func TestGenerate_BasicEntry(t *testing.T) {

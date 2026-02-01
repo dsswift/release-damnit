@@ -11,7 +11,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/spraguehouse/release-damnit/pkg/contracts"
+	"github.com/dsswift/release-damnit/pkg/contracts"
 )
 
 // Config represents the parsed release-please-config.json and manifest.

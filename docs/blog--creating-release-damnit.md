@@ -288,14 +288,35 @@ Each test creates a timestamped branch, pushes to origin, creates releases, veri
 
 The downstream build jobs check these outputs (`jarvis--release_created`, etc.) to decide whether to build.
 
-**Real testing is still needed.** The documentation and workflow are ready, but the actual proof is merging a feature branch to main and verifying all packages are detected correctly. This requires:
-1. Temporarily disabling `release-please.yml`
-2. Creating a feature branch with changes to multiple packages
-3. Merging to main with `--no-ff`
-4. Verifying VERSION bumps are correct
+### Phase 7: Release
 
-This is a manual validation step that I'll do before Phase 7 (final release).
+**Testing complete, everything working.** All E2E tests pass. The tool correctly handles every scenario we threw at it:
+- Merge commit traversal works as designed
+- Nested package matching (deepest-match-wins) works
+- Linked versions bump together
+- Breaking changes trigger major bumps
+- Multiple packages bump independently in a single merge
+
+**Moved to personal repo and made public.** The tool is now available at [github.com/dsswift/release-damnit](https://github.com/dsswift/release-damnit). The repository ownership migration was straightforward - update module paths, import statements, and documentation references.
+
+**The cherry-pick workflow is no longer necessary.** With release-damnit, the workflow is simply:
+1. Develop on feature branch
+2. Merge to main with `--no-ff`
+3. release-damnit detects all commits in the merge
+4. VERSION files, CHANGELOGs, and GitHub releases are created automatically
+
+No more splitting features into per-scope PRs. No more manual cherry-picking. The tool does what Release Please should have done from the start.
 
 ---
 
-*Final update coming in Phase 7 after production testing...*
+## Lessons Learned
+
+1. **Don't fight the tool, replace it.** When a tool has a fundamental architectural limitation, working around it creates more complexity than building a focused replacement.
+
+2. **Contract assertions pay off.** The `Require()`/`Ensure()` functions caught several bugs during development. The runtime cost is negligible for a tool that runs in seconds.
+
+3. **Test infrastructure is worth the investment.** The mock repo setup script took time to get right, but it enabled confident testing of every release scenario.
+
+4. **Shell out to CLI tools for complex integrations.** Using `gh` for GitHub releases avoided reimplementing OAuth, retries, and API quirks.
+
+5. **Deepest-match-wins is non-obvious but essential.** Nested package structures require explicit path matching logic, not just substring checks.

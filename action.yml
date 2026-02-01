@@ -1,6 +1,6 @@
 name: 'release-damnit'
 description: 'Drop-in replacement for Release Please with correct merge commit traversal'
-author: 'Sprague House'
+author: 'Joshua Sprague'
 
 branding:
   icon: 'tag'

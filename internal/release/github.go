@@ -6,7 +6,7 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/spraguehouse/release-damnit/internal/git"
+	"github.com/dsswift/release-damnit/internal/git"
 )
 
 // GitHubReleaseOptions configures GitHub release creation.

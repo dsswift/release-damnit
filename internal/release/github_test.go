@@ -4,9 +4,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/spraguehouse/release-damnit/internal/config"
-	"github.com/spraguehouse/release-damnit/internal/git"
-	"github.com/spraguehouse/release-damnit/internal/version"
+	"github.com/dsswift/release-damnit/internal/config"
+	"github.com/dsswift/release-damnit/internal/git"
+	"github.com/dsswift/release-damnit/internal/version"
 )
 
 func TestBuildGitHubRelease(t *testing.T) {

@@ -24,11 +24,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/spraguehouse/release-damnit/internal/release"
+	"github.com/dsswift/release-damnit/internal/release"
 )
 
-const mockRepoURL = "git@github.com:spraguehouse/mock--gitops-playground.git"
-const mockRepoHTTPS = "https://github.com/spraguehouse/mock--gitops-playground"
+const mockRepoURL = "git@github.com:dsswift/mock--gitops-playground.git"
+const mockRepoHTTPS = "https://github.com/dsswift/mock--gitops-playground"
 
 // cloneMockRepo clones the mock repo to a temp directory.
 func cloneMockRepo(t *testing.T) string {

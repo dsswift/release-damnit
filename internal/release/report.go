@@ -3,8 +3,8 @@
 package release
 
 import (
-	"github.com/spraguehouse/release-damnit/internal/config"
-	"github.com/spraguehouse/release-damnit/internal/git"
+	"github.com/dsswift/release-damnit/internal/config"
+	"github.com/dsswift/release-damnit/internal/git"
 )
 
 // ReleaseReport is the comprehensive JSON output for downstream workflows.

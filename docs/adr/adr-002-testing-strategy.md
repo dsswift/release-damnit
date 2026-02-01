@@ -69,7 +69,7 @@ Contracts are always active (not compiled out) because this tool runs briefly an
 
 ### Mock Repository
 
-A dedicated GitHub repository (`spraguehouse/mock--gitops-playground`) provides:
+A dedicated GitHub repository (`dsswift/mock--gitops-playground`) provides:
 - Deterministic structure that can be reset
 - Real GitHub API interactions for E2E tests
 - Isolated from production repositories

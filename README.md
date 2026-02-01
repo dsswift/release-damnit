@@ -13,7 +13,7 @@ release-damnit uses your existing Release Please configuration but reads git his
 ### As a GitHub Action
 
 ```yaml
-- uses: spraguehouse/release-damnit@v1
+- uses: dsswift/release-damnit@v1
   with:
     token: ${{ secrets.GITHUB_TOKEN }}
 ```
@@ -22,11 +22,11 @@ release-damnit uses your existing Release Please configuration but reads git his
 
 ```bash
 # Download binary
-curl -sSL https://github.com/spraguehouse/release-damnit/releases/latest/download/release-damnit-linux-amd64 -o release-damnit
+curl -sSL https://github.com/dsswift/release-damnit/releases/latest/download/release-damnit-linux-amd64 -o release-damnit
 chmod +x release-damnit
 
 # Or build from source
-go install github.com/spraguehouse/release-damnit/cmd/release-damnit@latest
+go install github.com/dsswift/release-damnit/cmd/release-damnit@latest
 ```
 
 ## Usage
@@ -187,7 +187,7 @@ jobs:
         with:
           fetch-depth: 0  # Required for git history analysis
 
-      - uses: spraguehouse/release-damnit@v1
+      - uses: dsswift/release-damnit@v1
         id: release
         with:
           token: ${{ secrets.GITHUB_TOKEN }}

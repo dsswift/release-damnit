@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/spraguehouse/release-damnit/pkg/contracts"
+	"github.com/dsswift/release-damnit/pkg/contracts"
 )
 
 // BumpType represents the type of version bump.

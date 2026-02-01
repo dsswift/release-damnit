@@ -10,7 +10,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/spraguehouse/release-damnit/pkg/contracts"
+	"github.com/dsswift/release-damnit/pkg/contracts"
 )
 
 // Commit represents a parsed git commit.

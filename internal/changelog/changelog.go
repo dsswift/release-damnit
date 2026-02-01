@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/spraguehouse/release-damnit/internal/git"
-	"github.com/spraguehouse/release-damnit/pkg/contracts"
+	"github.com/dsswift/release-damnit/internal/git"
+	"github.com/dsswift/release-damnit/pkg/contracts"
 )
 
 // Entry represents a changelog entry for a single version.

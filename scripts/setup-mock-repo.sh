@@ -23,7 +23,7 @@
 
 set -euo pipefail
 
-REPO_URL="${MOCK_REPO_URL:-git@github.com:spraguehouse/mock--gitops-playground.git}"
+REPO_URL="${MOCK_REPO_URL:-git@github.com:dsswift/mock--gitops-playground.git}"
 LOCAL_MODE=false
 
 # Parse arguments
@@ -59,7 +59,7 @@ cd "$WORK_DIR"
 
 # Initialize fresh repo (always start clean for deterministic state)
 git init --initial-branch=main
-git config user.email "release-damnit-test@spraguehouse.io"
+git config user.email "release-damnit-test@dsswift.io"
 git config user.name "release-damnit Test"
 
 if [ "$LOCAL_MODE" = true ]; then
@@ -269,7 +269,7 @@ jobs:
 
       - name: Run release-damnit
         id: release
-        uses: spraguehouse/release-damnit@main
+        uses: dsswift/release-damnit@main
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           dry_run: ${{ inputs.dry_run || 'false' }}

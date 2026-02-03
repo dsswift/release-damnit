@@ -445,3 +445,252 @@ func containsHelper(s, substr string) bool {
 	}
 	return false
 }
+
+func TestAnalyze_Stats_AllMatched(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test in short mode")
+	}
+
+	dir := setupBasicRepo(t)
+
+	// Add commits that all match the configured package
+	writeFile(t, dir, "workloads/service-a/src/main.go", "// Feature 1\n")
+	runCmd(t, dir, "git", "add", "-A")
+	runCmd(t, dir, "git", "commit", "-m", "feat(service-a): add feature 1")
+
+	writeFile(t, dir, "workloads/service-a/src/util.go", "// Utility\n")
+	runCmd(t, dir, "git", "add", "-A")
+	runCmd(t, dir, "git", "commit", "-m", "feat(service-a): add utility")
+
+	// Analyze the last commit only (non-merge)
+	opts := &Options{
+		RepoPath:             dir,
+		DryRun:               true,
+		TreatPreMajorAsMinor: true,
+	}
+
+	result, err := Analyze(opts)
+	if err != nil {
+		t.Fatalf("Analyze failed: %v", err)
+	}
+
+	// Stats should show all commits matched
+	if result.Stats == nil {
+		t.Fatal("expected Stats to be set")
+	}
+	if result.Stats.TotalCommits != 1 {
+		t.Errorf("expected TotalCommits=1, got %d", result.Stats.TotalCommits)
+	}
+	if result.Stats.MatchedCommits != 1 {
+		t.Errorf("expected MatchedCommits=1, got %d", result.Stats.MatchedCommits)
+	}
+	if result.Stats.UnmatchedCommits != 0 {
+		t.Errorf("expected UnmatchedCommits=0, got %d", result.Stats.UnmatchedCommits)
+	}
+	if len(result.Stats.OrphanedDirs) != 0 {
+		t.Errorf("expected no orphaned dirs, got %v", result.Stats.OrphanedDirs)
+	}
+}
+
+func TestAnalyze_Stats_UnmatchedCommits(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test in short mode")
+	}
+
+	dir := createTestRepo(t)
+
+	// Create config with one package
+	writeFile(t, dir, "release-please-config.json", `{
+		"packages": {
+			"workloads/service-a": {"component": "service-a"}
+		}
+	}`)
+	writeFile(t, dir, "release-please-manifest.json", `{
+		"workloads/service-a": "0.1.0"
+	}`)
+	writeFile(t, dir, "workloads/service-a/VERSION", "0.1.0\n")
+	writeFile(t, dir, "workloads/service-a/src/main.go", "// A\n")
+
+	runCmd(t, dir, "git", "add", "-A")
+	runCmd(t, dir, "git", "commit", "-m", "chore: initial commit")
+
+	// Create feature branch with mixed commits
+	runCmd(t, dir, "git", "checkout", "-b", "feature/mixed")
+
+	// Commit 1: touches configured package
+	writeFile(t, dir, "workloads/service-a/src/main.go", "// A\n// Feature\n")
+	runCmd(t, dir, "git", "add", "-A")
+	runCmd(t, dir, "git", "commit", "-m", "feat(service-a): add feature")
+
+	// Commit 2: touches unconfigured path
+	writeFile(t, dir, "workloads/service-b/src/main.go", "// B\n")
+	runCmd(t, dir, "git", "add", "-A")
+	runCmd(t, dir, "git", "commit", "-m", "feat(service-b): add service B")
+
+	// Commit 3: touches root-level file (no package)
+	writeFile(t, dir, "README.md", "# Readme\n")
+	runCmd(t, dir, "git", "add", "-A")
+	runCmd(t, dir, "git", "commit", "-m", "docs: add readme")
+
+	// Merge to main
+	runCmd(t, dir, "git", "checkout", "main")
+	runCmd(t, dir, "git", "merge", "--no-ff", "feature/mixed", "-m", "Merge branch 'feature/mixed'")
+
+	// Analyze
+	opts := &Options{
+		RepoPath:             dir,
+		DryRun:               true,
+		TreatPreMajorAsMinor: true,
+	}
+
+	result, err := Analyze(opts)
+	if err != nil {
+		t.Fatalf("Analyze failed: %v", err)
+	}
+
+	// Should have stats
+	if result.Stats == nil {
+		t.Fatal("expected Stats to be set")
+	}
+
+	// 3 total commits, 1 matched (service-a), 2 unmatched
+	if result.Stats.TotalCommits != 3 {
+		t.Errorf("expected TotalCommits=3, got %d", result.Stats.TotalCommits)
+	}
+	if result.Stats.MatchedCommits != 1 {
+		t.Errorf("expected MatchedCommits=1, got %d", result.Stats.MatchedCommits)
+	}
+	if result.Stats.UnmatchedCommits != 2 {
+		t.Errorf("expected UnmatchedCommits=2, got %d", result.Stats.UnmatchedCommits)
+	}
+
+	// Should have orphaned directories
+	if len(result.Stats.OrphanedDirs) == 0 {
+		t.Error("expected orphaned dirs to be tracked")
+	}
+
+	// Check specific orphaned dirs
+	foundServiceB := false
+	foundRoot := false
+	for _, dir := range result.Stats.OrphanedDirs {
+		if dir == "workloads/service-b/src" {
+			foundServiceB = true
+		}
+		if dir == "." {
+			foundRoot = true
+		}
+	}
+	if !foundServiceB {
+		t.Errorf("expected workloads/service-b/src in orphaned dirs, got %v", result.Stats.OrphanedDirs)
+	}
+	if !foundRoot {
+		t.Errorf("expected . (root) in orphaned dirs, got %v", result.Stats.OrphanedDirs)
+	}
+}
+
+func TestAnalyze_Stats_NoCommits(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test in short mode")
+	}
+
+	dir := createTestRepo(t)
+
+	// Create config
+	writeFile(t, dir, "release-please-config.json", `{
+		"packages": {
+			"workloads/service-a": {"component": "service-a"}
+		}
+	}`)
+	writeFile(t, dir, "release-please-manifest.json", `{
+		"workloads/service-a": "0.1.0"
+	}`)
+	writeFile(t, dir, "workloads/service-a/VERSION", "0.1.0\n")
+
+	runCmd(t, dir, "git", "add", "-A")
+	runCmd(t, dir, "git", "commit", "-m", "chore: initial commit")
+
+	// Analyze (single commit repo, HEAD~1 will fail, so 0 commits analyzed)
+	opts := &Options{
+		RepoPath: dir,
+		DryRun:   true,
+	}
+
+	result, err := Analyze(opts)
+	if err != nil {
+		t.Fatalf("Analyze failed: %v", err)
+	}
+
+	// Stats should exist but show 0 commits
+	if result.Stats == nil {
+		t.Fatal("expected Stats to be set")
+	}
+	if result.Stats.TotalCommits != 0 {
+		t.Errorf("expected TotalCommits=0, got %d", result.Stats.TotalCommits)
+	}
+	if result.Stats.MatchedCommits != 0 {
+		t.Errorf("expected MatchedCommits=0, got %d", result.Stats.MatchedCommits)
+	}
+	if result.Stats.UnmatchedCommits != 0 {
+		t.Errorf("expected UnmatchedCommits=0, got %d", result.Stats.UnmatchedCommits)
+	}
+}
+
+func TestAnalyze_Stats_OrphanedDirsSorted(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test in short mode")
+	}
+
+	dir := createTestRepo(t)
+
+	// Create config with one package
+	writeFile(t, dir, "release-please-config.json", `{
+		"packages": {
+			"workloads/service-a": {"component": "service-a"}
+		}
+	}`)
+	writeFile(t, dir, "release-please-manifest.json", `{
+		"workloads/service-a": "0.1.0"
+	}`)
+	writeFile(t, dir, "workloads/service-a/VERSION", "0.1.0\n")
+
+	runCmd(t, dir, "git", "add", "-A")
+	runCmd(t, dir, "git", "commit", "-m", "chore: initial commit")
+
+	// Create branch with commits touching multiple unconfigured paths
+	runCmd(t, dir, "git", "checkout", "-b", "feature/multi-orphan")
+
+	// Touch multiple directories in non-alphabetical order
+	writeFile(t, dir, "zzz/file.txt", "z\n")
+	writeFile(t, dir, "aaa/file.txt", "a\n")
+	writeFile(t, dir, "mmm/file.txt", "m\n")
+	runCmd(t, dir, "git", "add", "-A")
+	runCmd(t, dir, "git", "commit", "-m", "feat: add files to multiple dirs")
+
+	// Merge
+	runCmd(t, dir, "git", "checkout", "main")
+	runCmd(t, dir, "git", "merge", "--no-ff", "feature/multi-orphan", "-m", "Merge")
+
+	// Analyze
+	opts := &Options{
+		RepoPath: dir,
+		DryRun:   true,
+	}
+
+	result, err := Analyze(opts)
+	if err != nil {
+		t.Fatalf("Analyze failed: %v", err)
+	}
+
+	// OrphanedDirs should be sorted
+	if len(result.Stats.OrphanedDirs) < 3 {
+		t.Fatalf("expected at least 3 orphaned dirs, got %d: %v", len(result.Stats.OrphanedDirs), result.Stats.OrphanedDirs)
+	}
+
+	// Verify sorted order
+	for i := 1; i < len(result.Stats.OrphanedDirs); i++ {
+		if result.Stats.OrphanedDirs[i] < result.Stats.OrphanedDirs[i-1] {
+			t.Errorf("orphaned dirs not sorted: %v", result.Stats.OrphanedDirs)
+			break
+		}
+	}
+}

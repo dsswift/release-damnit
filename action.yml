@@ -23,6 +23,10 @@ inputs:
     description: 'GitHub repository URL (auto-detected if not provided)'
     required: false
     default: ''
+  verbose:
+    description: 'Show detailed analysis output (unmatched directories, commit details)'
+    required: false
+    default: 'false'
 
 outputs:
   releases_created:
@@ -65,6 +69,9 @@ runs:
         fi
         if [ -n "${{ inputs.repo-url }}" ]; then
           FLAGS="$FLAGS --repo-url ${{ inputs.repo-url }}"
+        fi
+        if [ "${{ inputs.verbose }}" = "true" ]; then
+          FLAGS="$FLAGS --verbose"
         fi
 
         ${{ github.action_path }}/release-damnit $FLAGS

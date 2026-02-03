@@ -34,6 +34,7 @@ func main() {
 	dryRun := flag.Bool("dry-run", false, "Show what would be done without making changes")
 	createReleases := flag.Bool("create-releases", false, "Create GitHub releases")
 	repoURL := flag.String("repo-url", "", "GitHub repository URL (auto-detected if not provided)")
+	verbose := flag.Bool("verbose", false, "Show detailed analysis output")
 	showVersion := flag.Bool("version", false, "Show version information")
 	help := flag.Bool("help", false, "Show help")
 
@@ -74,7 +75,7 @@ func main() {
 	}
 
 	// Print analysis results
-	printAnalysis(result)
+	printAnalysis(result, *verbose)
 
 	// Output for GitHub Actions (always output, even with no releases)
 	// This ensures downstream jobs can safely call fromJSON on release_report
@@ -130,6 +131,7 @@ Options:
   --dry-run          Show what would be done without making changes
   --create-releases  Create GitHub releases (requires gh CLI)
   --repo-url URL     GitHub repository URL (auto-detected if not provided)
+  --verbose          Show detailed analysis output (unmatched directories, commit details)
   --version          Show version information
   --help             Show this help
 
@@ -144,10 +146,13 @@ Examples:
   release-damnit
 
   # Also create GitHub releases
-  release-damnit --create-releases`)
+  release-damnit --create-releases
+
+  # Debug: show why commits weren't matched to packages
+  release-damnit --dry-run --verbose`)
 }
 
-func printAnalysis(result *release.AnalysisResult) {
+func printAnalysis(result *release.AnalysisResult, verbose bool) {
 	if result.MergeInfo.IsMerge {
 		fmt.Printf("Analyzing merge commit %s...\n", result.MergeInfo.HeadSHA[:7])
 		fmt.Printf("Merge range: %s..%s (%d commits)\n",
@@ -157,6 +162,51 @@ func printAnalysis(result *release.AnalysisResult) {
 	} else {
 		fmt.Printf("Analyzing commit %s...\n", result.MergeInfo.HeadSHA[:7])
 		fmt.Printf("Commits: %d\n", len(result.Commits))
+	}
+
+	// Always show summary line when there are unmatched commits
+	if result.Stats != nil && result.Stats.TotalCommits > 0 {
+		if result.Stats.UnmatchedCommits > 0 {
+			fmt.Printf("  → %d matched packages, %d unmatched commits\n",
+				result.Stats.MatchedCommits, result.Stats.UnmatchedCommits)
+		}
+	}
+
+	// Verbose: show orphaned directories
+	if verbose && result.Stats != nil && len(result.Stats.OrphanedDirs) > 0 {
+		fmt.Println("\nUnmatched directories (consider adding to config):")
+		for _, dir := range result.Stats.OrphanedDirs {
+			fmt.Printf("  %s/\n", dir)
+		}
+	}
+
+	// Verbose: show per-commit breakdown
+	if verbose && len(result.Commits) > 0 {
+		fmt.Println("\nCommit details:")
+		for _, c := range result.Commits {
+			// Format commit type and scope
+			var typeStr string
+			if c.Type != "" {
+				if c.Scope != "" {
+					typeStr = fmt.Sprintf("%s(%s)", c.Type, c.Scope)
+				} else {
+					typeStr = c.Type
+				}
+			} else {
+				typeStr = "non-conventional"
+			}
+			fmt.Printf("  %s %s: %s\n", c.ShortSHA, typeStr, c.Description)
+
+			// Show file-to-package mappings
+			for _, file := range c.Files {
+				pkg := result.Config.FindPackageForPath(file)
+				if pkg != nil {
+					fmt.Printf("         %s → %s\n", file, pkg.Component)
+				} else {
+					fmt.Printf("         %s → (no package)\n", file)
+				}
+			}
+		}
 	}
 
 	if len(result.Releases) > 0 {

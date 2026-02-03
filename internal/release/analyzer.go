@@ -26,6 +26,21 @@ type PackageRelease struct {
 	SkipReason  string // Set if this package is being skipped (e.g., linked to another)
 }
 
+// AnalysisStats tracks diagnostic statistics about the analysis.
+type AnalysisStats struct {
+	// TotalCommits is the total number of commits analyzed.
+	TotalCommits int
+
+	// MatchedCommits is the number of commits that touched at least one configured package.
+	MatchedCommits int
+
+	// UnmatchedCommits is the number of commits that touched no configured packages.
+	UnmatchedCommits int
+
+	// OrphanedDirs is a list of unique directories with changes but no package config.
+	OrphanedDirs []string
+}
+
 // AnalysisResult contains the result of analyzing commits for releases.
 type AnalysisResult struct {
 	// MergeInfo contains information about the merge commit (if applicable).
@@ -42,6 +57,9 @@ type AnalysisResult struct {
 
 	// RepoURL is the GitHub repository URL (for changelog links).
 	RepoURL string
+
+	// Stats contains diagnostic statistics about the analysis.
+	Stats *AnalysisStats
 }
 
 // Options configures the release analysis.
@@ -94,15 +112,41 @@ func Analyze(opts *Options) (*AnalysisResult, error) {
 		}
 	}
 
-	// Map commits to packages
+	// Map commits to packages and track stats
 	packageCommits := make(map[string][]*git.Commit)
+	matchedSHAs := make(map[string]bool)
+	orphanedDirSet := make(map[string]bool)
+
 	for _, commit := range commits {
+		commitMatched := false
 		for _, file := range commit.Files {
 			pkg := cfg.FindPackageForPath(file)
 			if pkg != nil {
 				packageCommits[pkg.Path] = append(packageCommits[pkg.Path], commit)
+				commitMatched = true
+			} else {
+				// Track directory of unmatched file
+				dir := filepath.Dir(file)
+				orphanedDirSet[dir] = true
 			}
 		}
+		if commitMatched {
+			matchedSHAs[commit.SHA] = true
+		}
+	}
+
+	// Build stats
+	var orphanedDirs []string
+	for dir := range orphanedDirSet {
+		orphanedDirs = append(orphanedDirs, dir)
+	}
+	sort.Strings(orphanedDirs)
+
+	stats := &AnalysisStats{
+		TotalCommits:     len(commits),
+		MatchedCommits:   len(matchedSHAs),
+		UnmatchedCommits: len(commits) - len(matchedSHAs),
+		OrphanedDirs:     orphanedDirs,
 	}
 
 	// Calculate bumps per package
@@ -114,6 +158,7 @@ func Analyze(opts *Options) (*AnalysisResult, error) {
 		Releases:  releases,
 		Config:    cfg,
 		RepoURL:   opts.RepoURL,
+		Stats:     stats,
 	}
 
 	return result, nil

@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [1.2.0](https://github.com/dsswift/release-damnit/compare/v1.1.0...v1.2.0) (2026-02-03)
+
+
+### Features
+
+* trigger patch bump for chore, refactor, style, test, build, ci ([f1c059e](https://github.com/dsswift/release-damnit/commit/f1c059e52f8786a4b70b05243121e7b053fbf44c))
+
 ## [1.1.0](https://github.com/dsswift/release-damnit/compare/v1.0.0...v1.1.0) (2026-02-03)
 
 

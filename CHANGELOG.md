@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [1.1.0](https://github.com/dsswift/release-damnit/compare/v1.0.0...v1.1.0) (2026-02-03)
+
+
+### Features
+
+* add verbose flag for detailed analysis output ([6f933d0](https://github.com/dsswift/release-damnit/commit/6f933d0d3f013ddb3a35d9ba082c5477a22f0873))
+
 ## 1.0.0 (2026-02-01)
 
 

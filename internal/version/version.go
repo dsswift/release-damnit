@@ -198,9 +198,9 @@ func CommitTypeToBump(commitType string) BumpType {
 	switch strings.ToLower(commitType) {
 	case "feat":
 		return Minor
-	case "fix", "perf":
+	case "fix", "perf", "chore", "style", "refactor", "test", "build", "ci":
 		return Patch
-	case "chore", "docs", "style", "refactor", "test", "build", "ci":
+	case "docs":
 		return None
 	default:
 		return None

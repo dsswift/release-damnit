@@ -194,14 +194,18 @@ func (v *Version) Compare(other *Version) int {
 
 // CommitTypeToBump maps a conventional commit type to a version bump.
 // Breaking changes should be detected separately.
+//
+// Only feat, fix, and perf produce a release. Everything else — chore, docs,
+// style, refactor, test, build, ci — is housekeeping that changes no
+// user-visible behaviour, so cutting a version for it publishes a release
+// whose notes say nothing happened. This matches the table in README.md and
+// release-please's own default.
 func CommitTypeToBump(commitType string) BumpType {
 	switch strings.ToLower(commitType) {
 	case "feat":
 		return Minor
-	case "fix", "perf", "chore", "style", "refactor", "test", "build", "ci":
+	case "fix", "perf":
 		return Patch
-	case "docs":
-		return None
 	default:
 		return None
 	}

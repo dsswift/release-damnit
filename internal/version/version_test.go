@@ -177,13 +177,15 @@ func TestCommitTypeToBump(t *testing.T) {
 		{"FEAT", Minor},
 		{"fix", Patch},
 		{"perf", Patch},
-		{"chore", Patch},
+		// Housekeeping types must not cut a release: a version whose notes
+		// say nothing happened is worse than no version.
+		{"chore", None},
 		{"docs", None},
-		{"style", Patch},
-		{"refactor", Patch},
-		{"test", Patch},
-		{"build", Patch},
-		{"ci", Patch},
+		{"style", None},
+		{"refactor", None},
+		{"test", None},
+		{"build", None},
+		{"ci", None},
 		{"unknown", None},
 		{"", None},
 	}

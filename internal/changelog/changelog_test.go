@@ -162,6 +162,7 @@ func TestBuildCompareURL(t *testing.T) {
 		name        string
 		repoURL     string
 		component   string
+		separator   string
 		prevVersion string
 		newVersion  string
 		want        string
@@ -198,11 +199,33 @@ func TestBuildCompareURL(t *testing.T) {
 			newVersion:  "1.0.0",
 			want:        "",
 		},
+		{
+			// A nested Go module. The module proxy resolves
+			// .../sdk/go@v1.1.0 only against a tag named exactly
+			// "sdk/go/v1.1.0", so the compare link has to use the same
+			// separator the tag does.
+			name:        "slash separator for a nested go module",
+			repoURL:     "https://github.com/owner/repo",
+			component:   "sdk/go",
+			separator:   "/",
+			prevVersion: "1.0.0",
+			newVersion:  "1.1.0",
+			want:        "https://github.com/owner/repo/compare/sdk/go/v1.0.0...sdk/go/v1.1.0",
+		},
+		{
+			name:        "empty separator falls back to the default",
+			repoURL:     "https://github.com/owner/repo",
+			component:   "engine",
+			separator:   "",
+			prevVersion: "1.0.0",
+			newVersion:  "1.1.0",
+			want:        "https://github.com/owner/repo/compare/engine-v1.0.0...engine-v1.1.0",
+		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got := BuildCompareURL(tc.repoURL, tc.component, tc.prevVersion, tc.newVersion)
+			got := BuildCompareURL(tc.repoURL, tc.component, tc.separator, tc.prevVersion, tc.newVersion)
 			if got != tc.want {
 				t.Errorf("BuildCompareURL() = %s, want %s", got, tc.want)
 			}

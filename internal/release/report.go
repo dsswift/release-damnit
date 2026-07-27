@@ -39,7 +39,13 @@ type ComponentRelease struct {
 	// BumpType is "major", "minor", or "patch".
 	BumpType string `json:"bump_type"`
 
-	// TagName is the git tag (e.g., "jarvis-v0.1.120").
+	// TagName is the git tag (e.g., "jarvis-v0.1.120", or "sdk/go/v1.0.0"
+	// for a package configured with a "/" tag-separator).
+	//
+	// Consumers should read this field rather than rebuilding the tag from
+	// component and version: the separator is per-package configuration, so a
+	// rebuilt "${component}-v${version}" is wrong for any package that does
+	// not use the default.
 	TagName string `json:"tag_name"`
 
 	// ReleaseURL is the GitHub release URL (if created).
@@ -174,7 +180,7 @@ func BuildReleaseReport(result *AnalysisResult, repoURL string) *ReleaseReport {
 			OldVersion: rel.OldVersion,
 			NewVersion: rel.NewVersion,
 			BumpType:   rel.BumpType.String(),
-			TagName:    buildTagName(rel.Package.Component, rel.NewVersion),
+			TagName:    rel.Package.TagName(rel.NewVersion),
 			LinkedBump: len(rel.Commits) == 0 && rel.Package.LinkedGroup != "",
 			Commits:    make([]CommitInfo, 0, len(rel.Commits)),
 		}
@@ -260,11 +266,6 @@ func BuildAnalysisInput(result *AnalysisResult) *AnalysisInput {
 	}
 
 	return input
-}
-
-// buildTagName creates a tag name from component and version.
-func buildTagName(component, version string) string {
-	return component + "-v" + version
 }
 
 // buildReleaseURL creates a GitHub release URL.

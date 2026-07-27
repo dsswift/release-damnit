@@ -40,6 +40,16 @@ type Package struct {
 	// Defaults to "CHANGELOG.md".
 	ChangelogPath string
 
+	// TagSeparator is the string between the component and the version in
+	// this package's tag: component + separator + "v" + version. Defaults to
+	// "-", producing "engine-v1.2.3".
+	//
+	// A nested Go module needs "/" instead. The Go module proxy resolves
+	// github.com/org/repo/sdk/go@vX.Y.Z only against a tag named exactly
+	// "sdk/go/vX.Y.Z", so a module released under "sdk/go-v1.0.0" is not
+	// fetchable at a version at all.
+	TagSeparator string
+
 	// CurrentVersion is the current version from the manifest.
 	CurrentVersion string
 
@@ -51,11 +61,18 @@ type Package struct {
 type releasePleaseConfig struct {
 	Packages map[string]packageConfig `json:"packages"`
 	Plugins  []pluginConfig           `json:"plugins"`
+	// TagSeparator is the repo-wide default, applied to any package that does
+	// not set its own. Absent means the conventional "-".
+	TagSeparator *string `json:"tag-separator"`
 }
 
 type packageConfig struct {
 	Component     string `json:"component"`
 	ChangelogPath string `json:"changelog-path"`
+	// TagSeparator overrides the string between the component and the version
+	// in this package's tag. Release Please supports it both at the top level
+	// and per package; we honour both, with the per-package value winning.
+	TagSeparator *string `json:"tag-separator"`
 }
 
 type pluginConfig struct {
@@ -128,6 +145,7 @@ func Load(repoRoot string) (*Config, error) {
 			ChangelogPath:  pkgConfig.ChangelogPath,
 			CurrentVersion: manifest[path],
 			LinkedGroup:    componentToGroup[pkgConfig.Component],
+			TagSeparator:   resolveTagSeparator(rpConfig.TagSeparator, pkgConfig.TagSeparator),
 		}
 
 		// Default changelog path
@@ -224,4 +242,39 @@ func normalizePath(path string) string {
 	// Remove leading /
 	path = strings.TrimPrefix(path, "/")
 	return path
+}
+
+// DefaultTagSeparator is the conventional separator between a component name
+// and its version in a tag: "engine" + "-" + "v1.2.3".
+const DefaultTagSeparator = "-"
+
+// resolveTagSeparator picks the effective separator for one package: its own
+// value if set, else the repo-wide default, else "-".
+//
+// Both are pointers so an explicitly-configured empty string ("component
+// immediately followed by the version") is distinguishable from "not
+// configured".
+func resolveTagSeparator(repoWide, perPackage *string) string {
+	if perPackage != nil {
+		return *perPackage
+	}
+	if repoWide != nil {
+		return *repoWide
+	}
+	return DefaultTagSeparator
+}
+
+// TagName returns this package's tag for a version:
+// component + separator + "v" + version.
+//
+// A zero-valued TagSeparator means the Package was built without going through
+// Load (a test fixture, or a caller constructing one by hand), so it falls back
+// to the default rather than silently producing "enginev1.2.3". A config that
+// genuinely wants no separator is an edge case not worth the ambiguity here.
+func (p *Package) TagName(version string) string {
+	sep := p.TagSeparator
+	if sep == "" {
+		sep = DefaultTagSeparator
+	}
+	return p.Component + sep + "v" + version
 }

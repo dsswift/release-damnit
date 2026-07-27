@@ -330,7 +330,7 @@ func writeGitHubOutput(result *release.AnalysisResult, repoURL string) {
 		component := rel.Package.Component
 		fmt.Fprintf(f, "%s--release_created=true\n", component)
 		fmt.Fprintf(f, "%s--version=%s\n", component, rel.NewVersion)
-		fmt.Fprintf(f, "%s--tag_name=%s-v%s\n", component, component, rel.NewVersion)
+		fmt.Fprintf(f, "%s--tag_name=%s\n", component, rel.Package.TagName(rel.NewVersion))
 	}
 }
 

@@ -59,7 +59,7 @@ func CreateGitHubReleases(result *AnalysisResult, opts *GitHubReleaseOptions) ([
 
 // BuildGitHubRelease constructs a GitHubRelease from a PackageRelease.
 func BuildGitHubRelease(rel *PackageRelease, repoURL string) *GitHubRelease {
-	tagName := fmt.Sprintf("%s-v%s", rel.Package.Component, rel.NewVersion)
+	tagName := rel.Package.TagName(rel.NewVersion)
 	title := fmt.Sprintf("%s v%s", rel.Package.Component, rel.NewVersion)
 	notes := BuildReleaseNotes(rel, repoURL)
 
@@ -110,8 +110,8 @@ func BuildReleaseNotes(rel *PackageRelease, repoURL string) string {
 
 	// Add compare link if we have a repo URL and old version
 	if repoURL != "" && rel.OldVersion != "" {
-		oldTag := fmt.Sprintf("%s-v%s", rel.Package.Component, rel.OldVersion)
-		newTag := fmt.Sprintf("%s-v%s", rel.Package.Component, rel.NewVersion)
+		oldTag := rel.Package.TagName(rel.OldVersion)
+		newTag := rel.Package.TagName(rel.NewVersion)
 		compareURL := fmt.Sprintf("%s/compare/%s...%s", repoURL, oldTag, newTag)
 		notes.WriteString(fmt.Sprintf("**Full Changelog**: %s\n", compareURL))
 	}

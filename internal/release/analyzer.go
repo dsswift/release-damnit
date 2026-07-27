@@ -317,7 +317,7 @@ func Apply(result *AnalysisResult, dryRun bool) error {
 
 		// Update CHANGELOG
 		changelogPath := filepath.Join(result.Config.RepoRoot, rel.Package.Path, rel.Package.ChangelogPath)
-		compareURL := changelog.BuildCompareURL(result.RepoURL, rel.Package.Component, rel.OldVersion, rel.NewVersion)
+		compareURL := changelog.BuildCompareURL(result.RepoURL, rel.Package.Component, rel.Package.TagSeparator, rel.OldVersion, rel.NewVersion)
 		if err := updateChangelog(changelogPath, rel, compareURL, result.RepoURL); err != nil {
 			return fmt.Errorf("failed to update CHANGELOG for %s: %w", rel.Package.Component, err)
 		}

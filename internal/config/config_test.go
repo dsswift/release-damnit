@@ -365,3 +365,109 @@ func TestNormalizePath(t *testing.T) {
 		})
 	}
 }
+
+// TestLoad_TagSeparator covers the per-package tag separator, which exists for
+// one concrete reason: the Go module proxy resolves
+// github.com/org/repo/sdk/go@vX.Y.Z only against a tag named exactly
+// "sdk/go/vX.Y.Z". A nested Go module released under the default
+// "sdk/go-vX.Y.Z" is not fetchable at a version at all, so the separator has to
+// be configurable per package rather than repo-wide.
+func TestLoad_TagSeparator(t *testing.T) {
+	t.Run("defaults to a dash when unconfigured", func(t *testing.T) {
+		dir := createTestRepo(t,
+			`{"packages": {"engine": {"component": "engine"}}}`,
+			`{"engine": "1.0.0"}`)
+
+		cfg, err := Load(dir)
+		if err != nil {
+			t.Fatalf("Load: %v", err)
+		}
+		pkg := cfg.Packages["engine"]
+		if pkg.TagSeparator != DefaultTagSeparator {
+			t.Errorf("TagSeparator = %q, want %q", pkg.TagSeparator, DefaultTagSeparator)
+		}
+		if got := pkg.TagName("1.1.0"); got != "engine-v1.1.0" {
+			t.Errorf("TagName = %q, want engine-v1.1.0", got)
+		}
+	})
+
+	t.Run("per-package value applies", func(t *testing.T) {
+		dir := createTestRepo(t,
+			`{"packages": {"sdk/go": {"component": "sdk/go", "tag-separator": "/"}}}`,
+			`{"sdk/go": "1.0.0"}`)
+
+		cfg, err := Load(dir)
+		if err != nil {
+			t.Fatalf("Load: %v", err)
+		}
+		pkg := cfg.Packages["sdk/go"]
+		if pkg.TagSeparator != "/" {
+			t.Errorf("TagSeparator = %q, want /", pkg.TagSeparator)
+		}
+		if got := pkg.TagName("1.1.0"); got != "sdk/go/v1.1.0" {
+			t.Errorf("TagName = %q, want sdk/go/v1.1.0 (the only form the Go module proxy resolves)", got)
+		}
+	})
+
+	t.Run("repo-wide value applies to packages that do not override it", func(t *testing.T) {
+		dir := createTestRepo(t,
+			`{"tag-separator": "@", "packages": {"engine": {"component": "engine"}}}`,
+			`{"engine": "1.0.0"}`)
+
+		cfg, err := Load(dir)
+		if err != nil {
+			t.Fatalf("Load: %v", err)
+		}
+		if got := cfg.Packages["engine"].TagName("2.0.0"); got != "engine@v2.0.0" {
+			t.Errorf("TagName = %q, want engine@v2.0.0", got)
+		}
+	})
+
+	t.Run("per-package value wins over the repo-wide one", func(t *testing.T) {
+		dir := createTestRepo(t, `{
+			"tag-separator": "-",
+			"packages": {
+				"engine": {"component": "engine"},
+				"sdk/go": {"component": "sdk/go", "tag-separator": "/"}
+			}
+		}`, `{"engine": "1.0.0", "sdk/go": "0.1.0"}`)
+
+		cfg, err := Load(dir)
+		if err != nil {
+			t.Fatalf("Load: %v", err)
+		}
+		if got := cfg.Packages["engine"].TagName("1.1.0"); got != "engine-v1.1.0" {
+			t.Errorf("engine TagName = %q, want engine-v1.1.0", got)
+		}
+		if got := cfg.Packages["sdk/go"].TagName("0.2.0"); got != "sdk/go/v0.2.0" {
+			t.Errorf("sdk/go TagName = %q, want sdk/go/v0.2.0", got)
+		}
+	})
+}
+
+// TestResolveTagSeparator pins the precedence directly, including that the
+// pointers distinguish "configured empty" from "not configured".
+func TestResolveTagSeparator(t *testing.T) {
+	str := func(s string) *string { return &s }
+
+	tests := []struct {
+		name     string
+		repoWide *string
+		perPkg   *string
+		want     string
+	}{
+		{"neither set", nil, nil, DefaultTagSeparator},
+		{"repo-wide only", str("@"), nil, "@"},
+		{"per-package only", nil, str("/"), "/"},
+		{"per-package wins", str("-"), str("/"), "/"},
+		{"per-package empty is still a choice", str("-"), str(""), ""},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := resolveTagSeparator(tc.repoWide, tc.perPkg); got != tc.want {
+				t.Errorf("resolveTagSeparator = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}

@@ -125,7 +125,11 @@ func Prepend(existingChangelog, newEntry string) string {
 }
 
 // BuildCompareURL creates a GitHub compare URL between two versions.
-func BuildCompareURL(repoURL, component, prevVersion, newVersion string) string {
+//
+// separator is the component/version separator from the package's config
+// (config.Package.TagSeparator). An empty value falls back to the conventional
+// "-", so callers that predate per-package separators keep working.
+func BuildCompareURL(repoURL, component, separator, prevVersion, newVersion string) string {
 	if repoURL == "" || prevVersion == "" {
 		return ""
 	}
@@ -133,9 +137,13 @@ func BuildCompareURL(repoURL, component, prevVersion, newVersion string) string 
 	// Ensure repoURL doesn't end with /
 	repoURL = strings.TrimSuffix(repoURL, "/")
 
-	// Tag format: component-vX.Y.Z
-	prevTag := fmt.Sprintf("%s-v%s", component, prevVersion)
-	newTag := fmt.Sprintf("%s-v%s", component, newVersion)
+	if separator == "" {
+		separator = "-"
+	}
+
+	// Tag format: component + separator + vX.Y.Z
+	prevTag := fmt.Sprintf("%s%sv%s", component, separator, prevVersion)
+	newTag := fmt.Sprintf("%s%sv%s", component, separator, newVersion)
 
 	return fmt.Sprintf("%s/compare/%s...%s", repoURL, prevTag, newTag)
 }

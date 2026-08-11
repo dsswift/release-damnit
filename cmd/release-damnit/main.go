@@ -35,11 +35,12 @@ func main() {
 	dryRun := flag.Bool("dry-run", false, "Show what would be done without making changes")
 	createReleases := flag.Bool("create-releases", false, "Create provider releases")
 	provider := flag.String("provider", "auto", "Release provider: auto, github, or gitlab")
-	gitlabToken := flag.String("gitlab-token", os.Getenv("GITLAB_TOKEN"), "GitLab project access token (or GITLAB_TOKEN)")
+	gitlabToken := flag.String("gitlab-token", os.Getenv("GITLAB_RELEASE_TOKEN"), "GitLab project access token (or GITLAB_RELEASE_TOKEN)")
 	repoURL := flag.String("repo-url", "", "GitHub repository URL (auto-detected if not provided)")
 	since := flag.String("since", "", "Analyze every commit after this one (the branch tip before the push)")
 	verbose := flag.Bool("verbose", false, "Show detailed analysis output")
 	showVersion := flag.Bool("version", false, "Show version information")
+	reportFile := flag.String("report-file", "", "Write the component release report JSON to this file")
 	help := flag.Bool("help", false, "Show help")
 
 	flag.Parse()
@@ -86,6 +87,16 @@ func main() {
 	// Print analysis results
 	printAnalysis(result, *verbose)
 
+	if *reportFile != "" {
+		reportJSON, marshalErr := json.Marshal(release.BuildReleaseReport(result, *repoURL))
+		if marshalErr != nil {
+			fatal("Failed to marshal release report: %v", marshalErr)
+		}
+		if writeErr := os.WriteFile(*reportFile, append(reportJSON, '\n'), 0644); writeErr != nil {
+			fatal("Failed to write release report: %v", writeErr)
+		}
+	}
+
 	// Output for GitHub Actions (always output, even with no releases)
 	// This ensures downstream jobs can safely call fromJSON on release_report
 	if os.Getenv("GITHUB_OUTPUT") != "" {
@@ -116,9 +127,9 @@ func main() {
 			selectedProvider := release.DetectProvider(*provider, *repoURL)
 			if selectedProvider == "gitlab" {
 				fmt.Println("\nCreating GitLab releases...")
-				releases, err := release.CreateGitLabReleases(result, &release.GitLabReleaseOptions{RepoPath: repoPath, Token: *gitlabToken})
+				releases, err := release.CreateGitLabReleases(result, &release.GitLabReleaseOptions{RepoPath: repoPath, Token: *gitlabToken, UseJobToken: *gitlabToken == ""})
 				if err != nil {
-					fmt.Fprintf(os.Stderr, "Warning: %v\n", err)
+					fatal("Failed to create provider releases: %v", err)
 				}
 				for _, rel := range releases {
 					fmt.Printf("  Created release %s\n", rel.TagName)
@@ -127,7 +138,7 @@ func main() {
 				fmt.Println("\nCreating GitHub releases...")
 				releases, err := release.CreateGitHubReleases(result, &release.GitHubReleaseOptions{RepoPath: repoPath})
 				if err != nil {
-					fmt.Fprintf(os.Stderr, "Warning: %v\n", err)
+					fatal("Failed to create provider releases: %v", err)
 				}
 				for _, rel := range releases {
 					fmt.Printf("  Created release %s\n", rel.TagName)
@@ -148,17 +159,18 @@ Options:
   --dry-run          Show what would be done without making changes
   --create-releases  Create provider releases
   --provider NAME     auto, github, or gitlab (default: auto)
-  --gitlab-token TOKEN GitLab project access token (or GITLAB_TOKEN)
+  --gitlab-token TOKEN GitLab project access token (or GITLAB_RELEASE_TOKEN)
   --repo-url URL     Repository URL (auto-detected if not provided)
   --since SHA        Analyze every commit after SHA, the branch tip before the
                      push. Ignored when SHA is not an ancestor of HEAD.
+  --report-file PATH Write component release report JSON
   --verbose          Show detailed analysis output (unmatched directories, commit details)
   --version          Show version information
   --help             Show this help
 
 Environment Variables:
   GITHUB_OUTPUT      Path to GitHub Actions output file
-  GITLAB_TOKEN       GitLab project access token for GitLab releases
+  GITLAB_RELEASE_TOKEN GitLab project access token for GitLab releases
   CI_API_V4_URL, CI_PROJECT_ID  GitLab CI API context
 
 Examples:

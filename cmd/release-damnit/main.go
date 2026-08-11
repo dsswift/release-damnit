@@ -8,7 +8,7 @@
 // Options:
 //
 //	--dry-run          Show what would be done without making changes
-//	--create-releases  Create GitHub releases (requires gh CLI)
+//	--create-releases  Create provider releases (GitHub or GitLab)
 //	--repo-url URL     GitHub repository URL (auto-detected if not provided)
 //	--since SHA        Analyze every commit after SHA (the pre-push tip)
 //	--help             Show this help
@@ -33,7 +33,9 @@ var (
 func main() {
 	// Define flags
 	dryRun := flag.Bool("dry-run", false, "Show what would be done without making changes")
-	createReleases := flag.Bool("create-releases", false, "Create GitHub releases")
+	createReleases := flag.Bool("create-releases", false, "Create provider releases")
+	provider := flag.String("provider", "auto", "Release provider: auto, github, or gitlab")
+	gitlabToken := flag.String("gitlab-token", os.Getenv("GITLAB_TOKEN"), "GitLab project access token (or GITLAB_TOKEN)")
 	repoURL := flag.String("repo-url", "", "GitHub repository URL (auto-detected if not provided)")
 	since := flag.String("since", "", "Analyze every commit after this one (the branch tip before the push)")
 	verbose := flag.Bool("verbose", false, "Show detailed analysis output")
@@ -109,19 +111,27 @@ func main() {
 			fmt.Printf("  Updated %s: %s → %s\n", rel.Package.Component, rel.OldVersion, rel.NewVersion)
 		}
 
-		// Create GitHub releases if requested
+		// Create provider release records and tags if requested.
 		if *createReleases {
-			fmt.Println("\nCreating GitHub releases...")
-			ghOpts := &release.GitHubReleaseOptions{
-				RepoPath: repoPath,
-				DryRun:   false,
-			}
-			ghReleases, err := release.CreateGitHubReleases(result, ghOpts)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Warning: %v\n", err)
-			}
-			for _, ghRel := range ghReleases {
-				fmt.Printf("  Created release %s\n", ghRel.TagName)
+			selectedProvider := release.DetectProvider(*provider, *repoURL)
+			if selectedProvider == "gitlab" {
+				fmt.Println("\nCreating GitLab releases...")
+				releases, err := release.CreateGitLabReleases(result, &release.GitLabReleaseOptions{RepoPath: repoPath, Token: *gitlabToken})
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "Warning: %v\n", err)
+				}
+				for _, rel := range releases {
+					fmt.Printf("  Created release %s\n", rel.TagName)
+				}
+			} else {
+				fmt.Println("\nCreating GitHub releases...")
+				releases, err := release.CreateGitHubReleases(result, &release.GitHubReleaseOptions{RepoPath: repoPath})
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "Warning: %v\n", err)
+				}
+				for _, rel := range releases {
+					fmt.Printf("  Created release %s\n", rel.TagName)
+				}
 			}
 		}
 	}
@@ -136,8 +146,10 @@ Usage:
 
 Options:
   --dry-run          Show what would be done without making changes
-  --create-releases  Create GitHub releases (requires gh CLI)
-  --repo-url URL     GitHub repository URL (auto-detected if not provided)
+  --create-releases  Create provider releases
+  --provider NAME     auto, github, or gitlab (default: auto)
+  --gitlab-token TOKEN GitLab project access token (or GITLAB_TOKEN)
+  --repo-url URL     Repository URL (auto-detected if not provided)
   --since SHA        Analyze every commit after SHA, the branch tip before the
                      push. Ignored when SHA is not an ancestor of HEAD.
   --verbose          Show detailed analysis output (unmatched directories, commit details)
@@ -145,7 +157,9 @@ Options:
   --help             Show this help
 
 Environment Variables:
-  GITHUB_OUTPUT      Path to GitHub Actions output file (set automatically in Actions)
+  GITHUB_OUTPUT      Path to GitHub Actions output file
+  GITLAB_TOKEN       GitLab project access token for GitLab releases
+  CI_API_V4_URL, CI_PROJECT_ID  GitLab CI API context
 
 Examples:
   # See what would be released
@@ -247,6 +261,12 @@ func detectRepoURL(repoPath string) string {
 	// Convert SSH URL to HTTPS
 	if strings.HasPrefix(url, "git@github.com:") {
 		url = strings.Replace(url, "git@github.com:", "https://github.com/", 1)
+	}
+	if strings.HasPrefix(url, "git@gitlab") {
+		parts := strings.SplitN(strings.TrimPrefix(url, "git@"), ":", 2)
+		if len(parts) == 2 {
+			url = "https://" + parts[0] + "/" + parts[1]
+		}
 	}
 
 	// Remove .git suffix

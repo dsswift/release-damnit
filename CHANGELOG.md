@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [1.3.0](https://github.com/dsswift/release-damnit/compare/v1.2.0...v1.3.0) (2026-08-17)
+
+
+### Features
+
+* add GitLab release provider ([2f0b770](https://github.com/dsswift/release-damnit/commit/2f0b7706f8f9f896ae9c543e08a8ec86e38a2037))
+
+
+### Bug Fixes
+
+* enforce gitlab release api contracts ([94f41e5](https://github.com/dsswift/release-damnit/commit/94f41e539e3f20f790c1eefa570820de19069c05))
+
 ## [1.2.0](https://github.com/dsswift/release-damnit/compare/v1.1.0...v1.2.0) (2026-02-03)
 
 

@@ -414,9 +414,9 @@ func TestE2E_Scenario_ComplexMerge(t *testing.T) {
 	// Define expected outcomes for each package
 	// Note: With TreatPreMajorAsMinor: false, feat → minor bump (0.1.0 → 0.2.0)
 	expectedReleases := map[string]struct {
-		newVersion   string
-		bumpReason   string
-		hasCommits   bool
+		newVersion string
+		bumpReason string
+		hasCommits bool
 	}{
 		"jarvis":                    {"0.2.0", "feat (minor bump)", true},
 		"jarvis-web":                {"0.2.0", "feat wins over fix and chore (minor bump)", true},
@@ -743,9 +743,9 @@ func TestE2E_FullGitHubReleaseFlow_MultiPackage(t *testing.T) {
 
 	// Verify expected components
 	expectedComponents := map[string]bool{
-		"jarvis":          false,
-		"sandbox-portal":  false,
-		"infrastructure":  false,
+		"jarvis":         false,
+		"sandbox-portal": false,
+		"infrastructure": false,
 	}
 
 	for _, ghRel := range ghReleases {
@@ -1040,14 +1040,14 @@ func TestE2E_ConfigParsing(t *testing.T) {
 
 	// Verify nested package paths
 	expectedPaths := map[string]string{
-		"jarvis":                  "workloads/jarvis",
-		"jarvis-web":              "workloads/jarvis/clients/web",
-		"jarvis-discord":          "workloads/jarvis/clients/discord",
-		"ma-observe-client":       "workloads/ma-observe/client",
-		"ma-observe-server":       "workloads/ma-observe/server",
-		"sandbox-portal":          "platforms/sandbox/portal",
+		"jarvis":                    "workloads/jarvis",
+		"jarvis-web":                "workloads/jarvis/clients/web",
+		"jarvis-discord":            "workloads/jarvis/clients/discord",
+		"ma-observe-client":         "workloads/ma-observe/client",
+		"ma-observe-server":         "workloads/ma-observe/server",
+		"sandbox-portal":            "platforms/sandbox/portal",
 		"sandbox-image-claude-code": "platforms/sandbox/images/claude-code",
-		"infrastructure":          "infrastructure/terraform",
+		"infrastructure":            "infrastructure/terraform",
 	}
 
 	for comp, expectedPath := range expectedPaths {

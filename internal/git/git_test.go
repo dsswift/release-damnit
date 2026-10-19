@@ -43,11 +43,11 @@ func writeFile(t *testing.T, dir, path, content string) {
 
 func TestParseCommit_ConventionalCommit(t *testing.T) {
 	tests := []struct {
-		subject     string
-		wantType    string
-		wantScope   string
-		wantBreak   bool
-		wantDesc    string
+		subject   string
+		wantType  string
+		wantScope string
+		wantBreak bool
+		wantDesc  string
 	}{
 		{
 			subject:   "feat: add new feature",

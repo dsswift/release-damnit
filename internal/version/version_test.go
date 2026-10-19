@@ -112,11 +112,11 @@ func TestVersion_IsPreMajor(t *testing.T) {
 
 func TestVersion_Bump(t *testing.T) {
 	tests := []struct {
-		name            string
-		v               Version
-		bump            BumpType
-		treatPreMajor   bool
-		want            string
+		name          string
+		v             Version
+		bump          BumpType
+		treatPreMajor bool
+		want          string
 	}{
 		{"patch", Version{1, 2, 3, "", ""}, Patch, false, "1.2.4"},
 		{"minor", Version{1, 2, 3, "", ""}, Minor, false, "1.3.0"},

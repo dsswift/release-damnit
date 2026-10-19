@@ -10,6 +10,7 @@
 //	--dry-run          Show what would be done without making changes
 //	--create-releases  Create GitHub releases (requires gh CLI)
 //	--repo-url URL     GitHub repository URL (auto-detected if not provided)
+//	--since SHA        Analyze every commit after SHA (the pre-push tip)
 //	--help             Show this help
 package main
 
@@ -34,6 +35,7 @@ func main() {
 	dryRun := flag.Bool("dry-run", false, "Show what would be done without making changes")
 	createReleases := flag.Bool("create-releases", false, "Create GitHub releases")
 	repoURL := flag.String("repo-url", "", "GitHub repository URL (auto-detected if not provided)")
+	since := flag.String("since", "", "Analyze every commit after this one (the branch tip before the push)")
 	verbose := flag.Bool("verbose", false, "Show detailed analysis output")
 	showVersion := flag.Bool("version", false, "Show version information")
 	help := flag.Bool("help", false, "Show help")
@@ -67,11 +69,16 @@ func main() {
 		DryRun:               *dryRun,
 		RepoURL:              *repoURL,
 		TreatPreMajorAsMinor: true, // Default behavior for pre-1.0 packages
+		Since:                *since,
 	}
 
 	result, err := release.Analyze(opts)
 	if err != nil {
 		fatal("Analysis failed: %v", err)
+	}
+
+	if *since != "" && result.Since == "" {
+		fmt.Printf("--since %s is not an ancestor of HEAD; analyzing HEAD alone\n", *since)
 	}
 
 	// Print analysis results
@@ -131,6 +138,8 @@ Options:
   --dry-run          Show what would be done without making changes
   --create-releases  Create GitHub releases (requires gh CLI)
   --repo-url URL     GitHub repository URL (auto-detected if not provided)
+  --since SHA        Analyze every commit after SHA, the branch tip before the
+                     push. Ignored when SHA is not an ancestor of HEAD.
   --verbose          Show detailed analysis output (unmatched directories, commit details)
   --version          Show version information
   --help             Show this help
@@ -153,7 +162,10 @@ Examples:
 }
 
 func printAnalysis(result *release.AnalysisResult, verbose bool) {
-	if result.MergeInfo.IsMerge {
+	if result.Since != "" {
+		fmt.Printf("Analyzing push %s..%s (%d commits)\n",
+			result.Since[:7], result.MergeInfo.HeadSHA[:7], len(result.Commits))
+	} else if result.MergeInfo.IsMerge {
 		fmt.Printf("Analyzing merge commit %s...\n", result.MergeInfo.HeadSHA[:7])
 		fmt.Printf("Merge range: %s..%s (%d commits)\n",
 			result.MergeInfo.MergeBase[:7],

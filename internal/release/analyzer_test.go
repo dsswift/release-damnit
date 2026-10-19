@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -351,10 +352,10 @@ func TestAnalyze_NoReleasableCommits(t *testing.T) {
 
 	dir := setupBasicRepo(t)
 
-	// Add a chore commit (not releasable)
+	// Add a docs commit (not releasable)
 	writeFile(t, dir, "workloads/service-a/src/main.go", "// Initial\n// Comment update\n")
 	runCmd(t, dir, "git", "add", "-A")
-	runCmd(t, dir, "git", "commit", "-m", "chore(service-a): update comments")
+	runCmd(t, dir, "git", "commit", "-m", "docs(service-a): update comments")
 
 	// Analyze
 	opts := &Options{
@@ -369,7 +370,7 @@ func TestAnalyze_NoReleasableCommits(t *testing.T) {
 
 	// Should have no releases
 	if len(result.Releases) != 0 {
-		t.Errorf("expected 0 releases for chore commit, got %d", len(result.Releases))
+		t.Errorf("expected 0 releases for docs commit, got %d", len(result.Releases))
 	}
 }
 
@@ -693,4 +694,79 @@ func TestAnalyze_Stats_OrphanedDirsSorted(t *testing.T) {
 			break
 		}
 	}
+}
+
+func TestAnalyze_SinceCoversEveryPushedCommit(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test in short mode")
+	}
+
+	dir := setupBasicRepo(t)
+	before := gitOutput(t, dir, "rev-parse", "HEAD")
+
+	// Three commits in one push; the tip touches no package.
+	writeFile(t, dir, "workloads/service-a/src/main.go", "// Initial\n// Feature\n")
+	runCmd(t, dir, "git", "add", "-A")
+	runCmd(t, dir, "git", "commit", "-m", "feat(service-a): add feature")
+	writeFile(t, dir, "workloads/service-a/src/main.go", "// Initial\n// Feature\n// Fix\n")
+	runCmd(t, dir, "git", "add", "-A")
+	runCmd(t, dir, "git", "commit", "-m", "fix(service-a): fix bug")
+	writeFile(t, dir, "docs/notes.md", "notes\n")
+	runCmd(t, dir, "git", "add", "-A")
+	runCmd(t, dir, "git", "commit", "-m", "docs: add notes")
+
+	result, err := Analyze(&Options{RepoPath: dir, DryRun: true, TreatPreMajorAsMinor: true, Since: before})
+	if err != nil {
+		t.Fatalf("Analyze failed: %v", err)
+	}
+	if result.Since != before {
+		t.Errorf("Since = %q, want %q", result.Since, before)
+	}
+	if len(result.Commits) != 3 {
+		t.Errorf("expected 3 commits, got %d", len(result.Commits))
+	}
+	if len(result.Releases) != 1 || len(result.Releases[0].Commits) != 2 {
+		t.Fatalf("expected service-a released from both commits, got %+v", result.Releases)
+	}
+
+	// Without Since only the docs tip is read and nothing releases.
+	headOnly, err := Analyze(&Options{RepoPath: dir, DryRun: true, TreatPreMajorAsMinor: true})
+	if err != nil {
+		t.Fatalf("Analyze failed: %v", err)
+	}
+	if len(headOnly.Releases) != 0 {
+		t.Errorf("expected no releases from the tip alone, got %d", len(headOnly.Releases))
+	}
+}
+
+func TestAnalyze_SinceThatIsNotAnAncestorFallsBackToHead(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test in short mode")
+	}
+
+	dir := setupBasicRepo(t)
+	writeFile(t, dir, "workloads/service-a/src/main.go", "// Initial\n// Feature\n")
+	runCmd(t, dir, "git", "add", "-A")
+	runCmd(t, dir, "git", "commit", "-m", "feat(service-a): add feature")
+
+	for _, since := range []string{"0000000000000000000000000000000000000000", "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef"} {
+		result, err := Analyze(&Options{RepoPath: dir, DryRun: true, TreatPreMajorAsMinor: true, Since: since})
+		if err != nil {
+			t.Fatalf("Analyze(%s) failed: %v", since, err)
+		}
+		if result.Since != "" || len(result.Commits) != 1 {
+			t.Errorf("since %s: Since = %q, commits = %d; want HEAD alone", since, result.Since, len(result.Commits))
+		}
+	}
+}
+
+func gitOutput(t *testing.T, dir string, args ...string) string {
+	t.Helper()
+	cmd := exec.Command("git", args...)
+	cmd.Dir = dir
+	out, err := cmd.Output()
+	if err != nil {
+		t.Fatalf("git %v: %v", args, err)
+	}
+	return strings.TrimSpace(string(out))
 }

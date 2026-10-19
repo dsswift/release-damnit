@@ -23,6 +23,10 @@ inputs:
     description: 'GitHub repository URL (auto-detected if not provided)'
     required: false
     default: ''
+  since:
+    description: 'Analyze every commit after this SHA, normally github.event.before. Ignored when it is not an ancestor of HEAD.'
+    required: false
+    default: ''
   verbose:
     description: 'Show detailed analysis output (unmatched directories, commit details)'
     required: false
@@ -69,6 +73,9 @@ runs:
         fi
         if [ -n "${{ inputs.repo-url }}" ]; then
           FLAGS="$FLAGS --repo-url ${{ inputs.repo-url }}"
+        fi
+        if [ -n "${{ inputs.since }}" ]; then
+          FLAGS="$FLAGS --since ${{ inputs.since }}"
         fi
         if [ "${{ inputs.verbose }}" = "true" ]; then
           FLAGS="$FLAGS --verbose"

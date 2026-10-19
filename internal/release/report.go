@@ -116,6 +116,9 @@ type GitInfo struct {
 	// MergeHead is the tip of the merged branch (for merge commits).
 	MergeHead string `json:"merge_head,omitempty"`
 
+	// Since is the commit the analyzed push range starts after, when one was used.
+	Since string `json:"since,omitempty"`
+
 	// Branch is the current branch name (if available).
 	Branch string `json:"branch,omitempty"`
 }
@@ -215,6 +218,7 @@ func BuildAnalysisInput(result *AnalysisResult) *AnalysisInput {
 		Git: GitInfo{
 			HeadSHA:       result.MergeInfo.HeadSHA,
 			IsMergeCommit: result.MergeInfo.IsMerge,
+			Since:         result.Since,
 		},
 		CommitsAnalyzed: make([]AnalyzedCommit, 0, len(result.Commits)),
 		Config: ConfigSummary{

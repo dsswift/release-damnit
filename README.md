@@ -16,7 +16,12 @@ release-damnit uses your existing Release Please configuration but reads git his
 - uses: dsswift/release-damnit@v1
   with:
     token: ${{ secrets.GITHUB_TOKEN }}
+    # Release every commit in the push, not just the tip.
+    since: ${{ github.event.before }}
 ```
+
+`since` needs the checkout to reach that commit, so check out with
+`fetch-depth: 0`.
 
 ### As a CLI
 
@@ -40,6 +45,9 @@ release-damnit
 
 # Also create GitHub releases
 release-damnit --create-releases
+
+# Analyze every commit after a given one, e.g. the branch tip before a push
+release-damnit --since 1a2b3c4 --dry-run
 ```
 
 ### Output Example
@@ -204,6 +212,8 @@ jobs:
 
 | Case | Behavior |
 |------|----------|
+| `--since` names an ancestor of HEAD | Analyzes `since..HEAD`: every commit in the push, merges included |
+| `--since` missing, all zeros, or not an ancestor (new branch, force push) | Falls back to the rules below |
 | Squash merge (non-merge commit) | Falls back to `HEAD~1..HEAD` |
 | No conventional commits | No bumps, "No releasable changes" |
 | Linked versions | All linked packages bump together |

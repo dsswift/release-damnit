@@ -95,6 +95,26 @@ func AnalyzeHead(repoPath string) (*MergeInfo, error) {
 	return info, nil
 }
 
+// ResolvePushBase resolves ref to a full SHA when it names a commit that HEAD
+// descends from. It reports false for an empty ref, the all-zero SHA a push
+// that creates a branch carries, a commit the clone does not have, and a
+// commit HEAD does not descend from (a force push).
+func ResolvePushBase(repoPath, ref string) (string, bool) {
+	contracts.RequireNotEmpty(repoPath, "repoPath")
+
+	if strings.Trim(ref, "0") == "" {
+		return "", false
+	}
+	sha, err := runGit(repoPath, "rev-parse", "--verify", "--quiet", ref+"^{commit}")
+	if err != nil {
+		return "", false
+	}
+	if _, err := runGit(repoPath, "merge-base", "--is-ancestor", sha, "HEAD"); err != nil {
+		return "", false
+	}
+	return sha, true
+}
+
 // GetCommitsInRange returns all commits in the range base..head (exclusive of base).
 // If head is empty, it defaults to HEAD.
 func GetCommitsInRange(repoPath, base, head string) ([]*Commit, error) {

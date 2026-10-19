@@ -18,12 +18,12 @@ import (
 
 // PackageRelease represents the release information for a single package.
 type PackageRelease struct {
-	Package     *config.Package
-	BumpType    version.BumpType
-	OldVersion  string
-	NewVersion  string
-	Commits     []*git.Commit
-	SkipReason  string // Set if this package is being skipped (e.g., linked to another)
+	Package    *config.Package
+	BumpType   version.BumpType
+	OldVersion string
+	NewVersion string
+	Commits    []*git.Commit
+	SkipReason string // Set if this package is being skipped (e.g., linked to another)
 }
 
 // AnalysisStats tracks diagnostic statistics about the analysis.
@@ -45,6 +45,10 @@ type AnalysisStats struct {
 type AnalysisResult struct {
 	// MergeInfo contains information about the merge commit (if applicable).
 	MergeInfo *git.MergeInfo
+
+	// Since is the commit the analyzed range starts after, when Options.Since
+	// resolved to an ancestor of HEAD. Empty when HEAD alone chose the range.
+	Since string
 
 	// Commits is the list of commits that were analyzed.
 	Commits []*git.Commit
@@ -75,6 +79,12 @@ type Options struct {
 
 	// TreatPreMajorAsMinor if true, feat bumps patch for 0.x versions.
 	TreatPreMajorAsMinor bool
+
+	// Since is the commit the branch pointed at before the push being
+	// released. When it resolves to an ancestor of HEAD, every commit in
+	// Since..HEAD is analyzed, so a push of many commits releases all of them.
+	// Otherwise the range comes from HEAD alone.
+	Since string
 }
 
 // Analyze analyzes HEAD for releasable changes.
@@ -96,13 +106,23 @@ func Analyze(opts *Options) (*AnalysisResult, error) {
 
 	// Get commits to analyze
 	var commits []*git.Commit
-	if mergeInfo.IsMerge {
+	since, hasSince := "", false
+	if opts.Since != "" {
+		since, hasSince = git.ResolvePushBase(opts.RepoPath, opts.Since)
+	}
+	switch {
+	case hasSince:
+		commits, err = git.GetCommitsInRange(opts.RepoPath, since, "HEAD")
+		if err != nil {
+			return nil, fmt.Errorf("failed to get pushed commits: %w", err)
+		}
+	case mergeInfo.IsMerge:
 		// Get commits from merge base to merge head (second parent)
 		commits, err = git.GetCommitsInRange(opts.RepoPath, mergeInfo.MergeBase, mergeInfo.MergeHead)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get merge commits: %w", err)
 		}
-	} else {
+	default:
 		// Fall back to HEAD~1..HEAD for non-merge commits
 		// This may fail if there's only one commit in the repo
 		commits, err = git.GetCommitsInRange(opts.RepoPath, "HEAD~1", "HEAD")
@@ -154,6 +174,7 @@ func Analyze(opts *Options) (*AnalysisResult, error) {
 
 	result := &AnalysisResult{
 		MergeInfo: mergeInfo,
+		Since:     since,
 		Commits:   commits,
 		Releases:  releases,
 		Config:    cfg,

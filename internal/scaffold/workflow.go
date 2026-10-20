@@ -66,7 +66,7 @@ const (
 	GitLabBuildPath = ".gitlab/build.yml"
 )
 
-// gitlabCI is the standard GitLab pipeline. VERSION is the release-damnit tag.
+// gitlabCI is the standard GitLab pipeline. {{version}} is the release-damnit tag.
 const gitlabCI = `# Every push to the default branch versions every feat and fix since the
 # last release with release-damnit, commits and tags the version, and creates
 # the GitLab release. The tag pipeline then runs the build in .gitlab/build.yml.
@@ -90,7 +90,7 @@ release:
   resource_group: release
   variables:
     GIT_DEPTH: "0"
-    RELEASE_DAMNIT_VERSION: VERSION
+    RELEASE_DAMNIT_VERSION: {{version}}
   script:
     - apk add --no-cache git curl
     - ARCH=$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')
@@ -125,7 +125,7 @@ build:
 
 // GitLabCI returns the GitLab pipeline that downloads release-damnit at version.
 func GitLabCI(version string) string {
-	return strings.Replace(gitlabCI, "VERSION", version, 1)
+	return strings.Replace(gitlabCI, "{{version}}", version, 1)
 }
 
 // GitLabBuild returns the starting build file.

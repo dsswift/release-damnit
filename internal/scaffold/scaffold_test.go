@@ -167,6 +167,10 @@ func TestRun_GitLab(t *testing.T) {
 	}
 	assertGolden(t, dir, ".gitlab-ci.yml", "gitlab-ci.yml")
 	assertGolden(t, dir, ".gitlab/build.yml", "gitlab-build.yml")
+	ci, _ := os.ReadFile(filepath.Join(dir, ".gitlab-ci.yml"))
+	if !strings.Contains(string(ci), "\n    RELEASE_DAMNIT_VERSION: "+DefaultReleaseDamnitVersion+"\n") || strings.Contains(string(ci), "{{") {
+		t.Errorf("the pipeline does not pin the release-damnit version as a variable:\n%s", ci)
+	}
 	if _, err := os.Stat(filepath.Join(dir, ".github")); !os.IsNotExist(err) {
 		t.Errorf("a GitLab repo got a .github directory (err %v)", err)
 	}

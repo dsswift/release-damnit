@@ -1,6 +1,6 @@
 name: 'release-damnit'
 description: 'Drop-in replacement for Release Please with correct merge commit traversal'
-author: 'Joshua Sprague'
+author: 'dsswift'
 
 branding:
   icon: 'tag'
@@ -16,7 +16,7 @@ inputs:
     required: false
     default: 'false'
   create-releases:
-    description: 'Create GitHub releases'
+    description: 'Create GitHub releases (ignored when publish is true, which creates them itself)'
     required: false
     default: 'true'
   repo-url:
@@ -31,6 +31,18 @@ inputs:
     description: 'Show detailed analysis output (unmatched directories, commit details)'
     required: false
     default: 'false'
+  publish:
+    description: 'Commit the version files, tag that commit, push both, then create the releases on those tags'
+    required: false
+    default: 'false'
+  before-publish:
+    description: 'Shell command run after the new versions are written and before the version commit, only when something is released. RELEASE_REPORT points at the report JSON.'
+    required: false
+    default: ''
+  publish-add:
+    description: 'Space-separated paths the before-publish step changed that belong in the version commit'
+    required: false
+    default: ''
 
 outputs:
   releases_created:
@@ -42,6 +54,18 @@ outputs:
   analysis_input:
     description: 'JSON of input data used for release decisions (commits, files, config)'
     value: ${{ steps.release.outputs.analysis_input }}
+  released:
+    description: 'publish only: whether a version commit and tags were pushed (true/false)'
+    value: ${{ steps.release.outputs.released }}
+  tag:
+    description: 'publish only: tag of the first release'
+    value: ${{ steps.release.outputs.tag }}
+  version:
+    description: 'publish only: version of the first release'
+    value: ${{ steps.release.outputs.version }}
+  tags:
+    description: 'publish only: every pushed tag, space-separated'
+    value: ${{ steps.release.outputs.tags }}
 
 runs:
   using: 'composite'
@@ -49,36 +73,76 @@ runs:
     - name: Setup Go
       uses: actions/setup-go@v5
       with:
-        go-version: '1.22'
+        go-version-file: ${{ github.action_path }}/go.mod
         cache: false
 
     - name: Build release-damnit
       shell: bash
+      env:
+        ACTION_REF: ${{ github.action_ref }}
       run: |
-        cd ${{ github.action_path }}
-        go build -o release-damnit ./cmd/release-damnit
+        cd "$GITHUB_ACTION_PATH"
+        # A local action (uses: ./) has no ref; its VERSION file names it.
+        BUILD_VERSION="${ACTION_REF:-v$(cat VERSION 2>/dev/null || echo 0.0.0)}"
+        BUILD_SHA="$(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
+        mkdir -p "$RUNNER_TEMP/release-damnit-bin"
+        go build -ldflags "-X main.version=$BUILD_VERSION -X main.gitSha=$BUILD_SHA" \
+          -o "$RUNNER_TEMP/release-damnit-bin/release-damnit" ./cmd/release-damnit
+        echo "$RUNNER_TEMP/release-damnit-bin" >> "$GITHUB_PATH"
 
     - name: Run release-damnit
       id: release
       shell: bash
       env:
         GITHUB_TOKEN: ${{ inputs.token }}
+        INPUT_DRY_RUN: ${{ inputs.dry-run }}
+        INPUT_CREATE_RELEASES: ${{ inputs.create-releases }}
+        INPUT_REPO_URL: ${{ inputs.repo-url }}
+        INPUT_SINCE: ${{ inputs.since }}
+        INPUT_VERBOSE: ${{ inputs.verbose }}
+        INPUT_PUBLISH: ${{ inputs.publish }}
+        INPUT_BEFORE_PUBLISH: ${{ inputs.before-publish }}
+        INPUT_PUBLISH_ADD: ${{ inputs.publish-add }}
       run: |
-        FLAGS=""
-        if [ "${{ inputs.dry-run }}" = "true" ]; then
-          FLAGS="$FLAGS --dry-run"
+        FLAGS=()
+        if [ "$INPUT_DRY_RUN" = "true" ]; then
+          FLAGS+=(--dry-run)
         fi
-        if [ "${{ inputs.create-releases }}" = "true" ]; then
-          FLAGS="$FLAGS --create-releases"
+        if [ "$INPUT_PUBLISH" != "true" ] && [ "$INPUT_CREATE_RELEASES" = "true" ]; then
+          FLAGS+=(--create-releases)
         fi
-        if [ -n "${{ inputs.repo-url }}" ]; then
-          FLAGS="$FLAGS --repo-url ${{ inputs.repo-url }}"
+        if [ -n "$INPUT_REPO_URL" ]; then
+          FLAGS+=(--repo-url "$INPUT_REPO_URL")
         fi
-        if [ -n "${{ inputs.since }}" ]; then
-          FLAGS="$FLAGS --since ${{ inputs.since }}"
+        if [ -n "$INPUT_SINCE" ]; then
+          FLAGS+=(--since "$INPUT_SINCE")
         fi
-        if [ "${{ inputs.verbose }}" = "true" ]; then
-          FLAGS="$FLAGS --verbose"
+        if [ "$INPUT_VERBOSE" = "true" ]; then
+          FLAGS+=(--verbose)
         fi
 
-        ${{ github.action_path }}/release-damnit $FLAGS
+        if [ "$INPUT_PUBLISH" != "true" ]; then
+          release-damnit "${FLAGS[@]}"
+          exit 0
+        fi
+
+        REPORT="$RUNNER_TEMP/release-report.json"
+        release-damnit "${FLAGS[@]}" --report-file "$REPORT"
+        if [ "$INPUT_DRY_RUN" = "true" ]; then
+          echo "dry-run: not publishing"
+          echo "released=false" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+
+        git config user.name "github-actions[bot]"
+        git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+        if [ -n "$INPUT_BEFORE_PUBLISH" ] && ! grep -q '"total_releases":0,' "$REPORT"; then
+          RELEASE_REPORT="$REPORT" bash -eo pipefail -c "$INPUT_BEFORE_PUBLISH"
+        fi
+
+        ADD=()
+        for path in $INPUT_PUBLISH_ADD; do
+          ADD+=(--add "$path")
+        done
+        release-damnit publish --report-file "$REPORT" "${ADD[@]}"

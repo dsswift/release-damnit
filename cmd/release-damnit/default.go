@@ -5,9 +5,8 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"os/exec"
-	"strings"
 
+	"github.com/dsswift/release-damnit/internal/git"
 	"github.com/dsswift/release-damnit/internal/release"
 )
 
@@ -47,7 +46,7 @@ func runDefault() {
 
 	// Auto-detect repo URL if not provided
 	if *repoURL == "" {
-		*repoURL = detectRepoURL(repoPath)
+		*repoURL = git.WebURL(repoPath, "origin")
 	}
 
 	// Run analysis
@@ -204,33 +203,6 @@ func printAnalysis(result *release.AnalysisResult, verbose bool) {
 				commitCount)
 		}
 	}
-}
-
-func detectRepoURL(repoPath string) string {
-	cmd := exec.Command("git", "remote", "get-url", "origin")
-	cmd.Dir = repoPath
-	output, err := cmd.Output()
-	if err != nil {
-		return ""
-	}
-
-	url := strings.TrimSpace(string(output))
-
-	// Convert SSH URL to HTTPS
-	if strings.HasPrefix(url, "git@github.com:") {
-		url = strings.Replace(url, "git@github.com:", "https://github.com/", 1)
-	}
-	if strings.HasPrefix(url, "git@gitlab") {
-		parts := strings.SplitN(strings.TrimPrefix(url, "git@"), ":", 2)
-		if len(parts) == 2 {
-			url = "https://" + parts[0] + "/" + parts[1]
-		}
-	}
-
-	// Remove .git suffix
-	url = strings.TrimSuffix(url, ".git")
-
-	return url
 }
 
 func writeGitHubOutput(result *release.AnalysisResult, repoURL string) {

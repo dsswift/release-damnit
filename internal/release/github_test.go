@@ -236,3 +236,16 @@ func TestFormatCommitLink(t *testing.T) {
 		t.Errorf("expected abc1234, got %s", link)
 	}
 }
+
+func TestGitHubReleaseArgs(t *testing.T) {
+	rel := &GitHubRelease{TagName: "v1.4.0", Title: "tool v1.4.0", Notes: "notes", TargetSHA: "abc123"}
+
+	created := strings.Join(GitHubReleaseArgs(rel, false), " ")
+	if created != "release create v1.4.0 --title tool v1.4.0 --notes notes --target abc123" {
+		t.Errorf("new tag args = %s", created)
+	}
+	existing := strings.Join(GitHubReleaseArgs(rel, true), " ")
+	if existing != "release create v1.4.0 --title tool v1.4.0 --notes notes --verify-tag" {
+		t.Errorf("existing tag args = %s; the release must use the pushed tag, not a new one at --target", existing)
+	}
+}

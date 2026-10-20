@@ -19,6 +19,11 @@ type GitHubReleaseOptions struct {
 
 	// Verbose if true, print release notes before creating.
 	Verbose bool
+
+	// ExistingTags creates each release on a tag that is already pushed
+	// (gh release create --verify-tag) instead of having GitHub create the
+	// tag at the analyzed commit.
+	ExistingTags bool
 }
 
 // GitHubRelease represents a GitHub release to be created.
@@ -47,7 +52,10 @@ func CreateGitHubReleases(result *AnalysisResult, opts *GitHubReleaseOptions) ([
 			continue
 		}
 
-		if err := executeGitHubRelease(opts.RepoPath, ghRelease); err != nil {
+		if opts.ExistingTags {
+			ghRelease.TargetSHA = ""
+		}
+		if err := executeGitHubRelease(opts.RepoPath, ghRelease, opts.ExistingTags); err != nil {
 			return releases, fmt.Errorf("failed to create release for %s: %w", rel.Package.Component, err)
 		}
 
@@ -137,16 +145,8 @@ func formatCommitLink(c *git.Commit, repoURL string) string {
 }
 
 // executeGitHubRelease creates a release using the gh CLI.
-func executeGitHubRelease(repoPath string, ghRelease *GitHubRelease) error {
-	args := []string{
-		"release", "create", ghRelease.TagName,
-		"--title", ghRelease.Title,
-		"--notes", ghRelease.Notes,
-	}
-
-	if ghRelease.TargetSHA != "" {
-		args = append(args, "--target", ghRelease.TargetSHA)
-	}
+func executeGitHubRelease(repoPath string, ghRelease *GitHubRelease, existingTag bool) error {
+	args := GitHubReleaseArgs(ghRelease, existingTag)
 
 	cmd := exec.Command("gh", args...)
 	if repoPath != "" {
@@ -156,6 +156,23 @@ func executeGitHubRelease(repoPath string, ghRelease *GitHubRelease) error {
 	cmd.Stderr = os.Stderr
 
 	return cmd.Run()
+}
+
+// GitHubReleaseArgs returns the gh arguments that create ghRelease. With
+// existingTag the release must use the pushed tag as it is.
+func GitHubReleaseArgs(ghRelease *GitHubRelease, existingTag bool) []string {
+	args := []string{
+		"release", "create", ghRelease.TagName,
+		"--title", ghRelease.Title,
+		"--notes", ghRelease.Notes,
+	}
+	if existingTag {
+		return append(args, "--verify-tag")
+	}
+	if ghRelease.TargetSHA != "" {
+		args = append(args, "--target", ghRelease.TargetSHA)
+	}
+	return args
 }
 
 // CheckGHCLI verifies that the gh CLI is installed and authenticated.

@@ -40,7 +40,7 @@ func cli(t *testing.T, dir string, args ...string) (string, int) {
 	return string(out), 0
 }
 
-func git(t *testing.T, dir string, args ...string) string {
+func gitRun(t *testing.T, dir string, args ...string) string {
 	t.Helper()
 	cmd := exec.Command("git", args...)
 	cmd.Dir = dir
@@ -65,9 +65,9 @@ func write(t *testing.T, dir, path, content string) {
 func newRepo(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
-	git(t, dir, "init", "-q", "--initial-branch=main")
-	git(t, dir, "config", "user.email", "user@example.com")
-	git(t, dir, "config", "user.name", "Test")
+	gitRun(t, dir, "init", "-q", "--initial-branch=main")
+	gitRun(t, dir, "config", "user.email", "user@example.com")
+	gitRun(t, dir, "config", "user.name", "Test")
 	return dir
 }
 
@@ -77,7 +77,7 @@ func TestCLI_CheckCommit(t *testing.T) {
 	write(t, dir, "release-please-manifest.json", `{}`)
 	write(t, dir, "a/x", "1\n")
 	write(t, dir, "b/y", "1\n")
-	git(t, dir, "add", "-A")
+	gitRun(t, dir, "add", "-A")
 
 	write(t, dir, ".git/MSG", "feat(a): add x\n")
 	out, code := cli(t, dir, "check-commit", ".git/MSG")
@@ -85,7 +85,7 @@ func TestCLI_CheckCommit(t *testing.T) {
 		t.Errorf("exit %d, output:\n%s", code, out)
 	}
 
-	git(t, dir, "reset", "-q", "b/y")
+	gitRun(t, dir, "reset", "-q", "b/y")
 	if out, code := cli(t, dir, "check-commit", ".git/MSG"); code != 0 || out != "" {
 		t.Errorf("good commit: exit %d, output %q", code, out)
 	}
@@ -101,14 +101,14 @@ func TestCLI_CheckCommit(t *testing.T) {
 func TestCLI_CheckCommits(t *testing.T) {
 	dir := newRepo(t)
 	write(t, dir, "x", "1\n")
-	git(t, dir, "add", "-A")
-	git(t, dir, "commit", "-qm", "chore: initial")
-	base := git(t, dir, "rev-parse", "HEAD")
+	gitRun(t, dir, "add", "-A")
+	gitRun(t, dir, "commit", "-qm", "chore: initial")
+	base := gitRun(t, dir, "rev-parse", "HEAD")
 	write(t, dir, "x", "2\n")
-	git(t, dir, "commit", "-qam", "feat: Bad one.")
+	gitRun(t, dir, "commit", "-qam", "feat: Bad one.")
 	write(t, dir, "x", "3\n")
-	git(t, dir, "commit", "-qam", "fix: fine")
-	bad := git(t, dir, "rev-parse", "--short=9", "HEAD~1")
+	gitRun(t, dir, "commit", "-qam", "fix: fine")
+	bad := gitRun(t, dir, "rev-parse", "--short=9", "HEAD~1")
 
 	out, code := cli(t, dir, "check-commits", base+"..HEAD")
 	if code != 1 || !strings.Contains(out, "release-damnit check-commit: "+bad+" feat: Bad one.") || !strings.Contains(out, "1 commit(s) break the commit rules") {
@@ -133,24 +133,24 @@ func TestCLI_UnknownFirstArgumentRunsTheDefaultCommand(t *testing.T) {
 func TestCLI_Land(t *testing.T) {
 	root := t.TempDir()
 	remote := filepath.Join(root, "remote.git")
-	git(t, root, "init", "-q", "--bare", "--initial-branch=main", remote)
+	gitRun(t, root, "init", "-q", "--bare", "--initial-branch=main", remote)
 	clone := filepath.Join(root, "clone")
-	git(t, root, "clone", "-q", remote, clone)
-	git(t, clone, "config", "user.email", "user@example.com")
-	git(t, clone, "config", "user.name", "Test")
+	gitRun(t, root, "clone", "-q", remote, clone)
+	gitRun(t, clone, "config", "user.email", "user@example.com")
+	gitRun(t, clone, "config", "user.name", "Test")
 	write(t, clone, "a.txt", "a\n")
-	git(t, clone, "add", "-A")
-	git(t, clone, "commit", "-qm", "feat: add a")
-	git(t, clone, "push", "-q", "origin", "main")
+	gitRun(t, clone, "add", "-A")
+	gitRun(t, clone, "commit", "-qm", "feat: add a")
+	gitRun(t, clone, "push", "-q", "origin", "main")
 	write(t, clone, "b.txt", "b\n")
-	git(t, clone, "add", "-A")
-	git(t, clone, "commit", "-qm", "fix: add b")
+	gitRun(t, clone, "add", "-A")
+	gitRun(t, clone, "commit", "-qm", "fix: add b")
 
 	out, code := cli(t, clone, "land", "--attempts", "2")
 	if code != 0 || !strings.Contains(out, "release-damnit land: attempt 1/2: fetching origin/main") {
 		t.Errorf("exit %d, output:\n%s", code, out)
 	}
-	if git(t, remote, "rev-parse", "main") != git(t, clone, "rev-parse", "HEAD") {
+	if gitRun(t, remote, "rev-parse", "main") != gitRun(t, clone, "rev-parse", "HEAD") {
 		t.Error("not landed")
 	}
 	if _, code := cli(t, clone, "land", "-h"); code != 0 {
@@ -169,7 +169,7 @@ func TestCLI_HookBlocksABadCommit(t *testing.T) {
 		t.Fatalf("hooks: exit %d, %s", code, out)
 	}
 	write(t, dir, "x.txt", "x\n")
-	git(t, dir, "add", "-A")
+	gitRun(t, dir, "add", "-A")
 
 	commit := func(message string) (string, error) {
 		cmd := exec.Command("git", "commit", "-q", "-m", message)
@@ -186,5 +186,11 @@ func TestCLI_HookBlocksABadCommit(t *testing.T) {
 	}
 	if out, code := cli(t, dir, "hooks"); code != 0 || !strings.Contains(out, "already in place") {
 		t.Errorf("second run: exit %d, %s", code, out)
+	}
+}
+
+func TestCLI_PublishNeedsAReport(t *testing.T) {
+	if out, code := cli(t, t.TempDir(), "publish"); code != 2 || !strings.Contains(out, "--report-file") {
+		t.Errorf("exit %d, output %s", code, out)
 	}
 }

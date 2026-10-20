@@ -59,3 +59,25 @@ func Toplevel(dir string) (string, error) {
 	}
 	return top, nil
 }
+
+// WebURL returns the browsable https URL of a remote: SSH forms for GitHub
+// and GitLab hosts become https, and a trailing .git is dropped. Empty when
+// the remote does not exist.
+func WebURL(dir, remote string) string {
+	url, err := runGit(dir, "remote", "get-url", remote)
+	if err != nil {
+		return ""
+	}
+
+	if strings.HasPrefix(url, "git@github.com:") {
+		url = strings.Replace(url, "git@github.com:", "https://github.com/", 1)
+	}
+	if strings.HasPrefix(url, "git@gitlab") {
+		parts := strings.SplitN(strings.TrimPrefix(url, "git@"), ":", 2)
+		if len(parts) == 2 {
+			url = "https://" + parts[0] + "/" + parts[1]
+		}
+	}
+
+	return strings.TrimSuffix(url, ".git")
+}

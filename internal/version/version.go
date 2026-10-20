@@ -42,6 +42,16 @@ func (b BumpType) String() string {
 	}
 }
 
+// ParseBumpType is the inverse of BumpType.String. Unknown names are None.
+func ParseBumpType(s string) BumpType {
+	for _, b := range []BumpType{Patch, Minor, Major} {
+		if b.String() == s {
+			return b
+		}
+	}
+	return None
+}
+
 // Version represents a parsed semantic version.
 type Version struct {
 	Major      int

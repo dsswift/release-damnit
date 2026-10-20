@@ -344,8 +344,11 @@ jobs:
       released: ${{ steps.release.outputs.released }}
       tag: ${{ steps.release.outputs.tag }}
     steps:
+      # The branch tip, not the pushed commit: a run queued behind another
+      # release must see that release's version commit and tags.
       - uses: actions/checkout@v4
         with:
+          ref: ${{ github.ref_name }}
           fetch-depth: 0
       - id: release
         uses: dsswift/release-damnit@v1.4.0

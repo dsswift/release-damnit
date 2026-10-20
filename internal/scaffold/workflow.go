@@ -29,8 +29,11 @@ jobs:
       tag: ${{ steps.release.outputs.tag }}
       version: ${{ steps.release.outputs.version }}
     steps:
+      # The branch tip, not the pushed commit: a run queued behind another
+      # release must see that release's version commit and tags.
       - uses: actions/checkout@v4
         with:
+          ref: ${{ github.ref_name }}
           fetch-depth: 0
       - id: release
         uses: USES

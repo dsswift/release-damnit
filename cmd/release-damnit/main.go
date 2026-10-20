@@ -26,6 +26,7 @@ var commands = map[string]func(args []string) int{
 	"land":          runLand,
 	"hooks":         runHooks,
 	"publish":       runPublish,
+	"init":          runInit,
 }
 
 func main() {
@@ -64,6 +65,7 @@ Commands:
   land [branch]            Land main's local commits, or a branch as a --no-ff merge, and push
   hooks                    Install the commit-msg hook that runs check-commit
   publish                  Commit the version files, tag that commit, push, create releases
+  init                     Scaffold release config, workflow and hook for a single repo (GitHub)
 
   Run release-damnit <command> -h for a command's options.
 

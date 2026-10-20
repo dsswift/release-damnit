@@ -194,3 +194,25 @@ func TestCLI_PublishNeedsAReport(t *testing.T) {
 		t.Errorf("exit %d, output %s", code, out)
 	}
 }
+
+func TestCLI_Init(t *testing.T) {
+	dir := newRepo(t)
+	out, code := cli(t, dir, "init", "--component", "tool", "--version", "1.2.3")
+	if code != 0 {
+		t.Fatalf("exit %d:\n%s", code, out)
+	}
+	for _, want := range []string{"release-damnit init: tool at 1.2.3", "wrote .github/workflows/release.yml", "installed the commit-msg hook", ".github/workflows/build.yml"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("output lacks %q:\n%s", want, out)
+		}
+	}
+	if out, code := cli(t, dir, "init"); code != 1 || !strings.Contains(out, "files already exist") {
+		t.Errorf("second init: exit %d\n%s", code, out)
+	}
+	if out, code := cli(t, dir, "init", "--forge", "gitlab"); code != 1 || !strings.Contains(out, "gitlab scaffolding is not built yet; set the repo up by hand from the standard") {
+		t.Errorf("gitlab: exit %d\n%s", code, out)
+	}
+	if out, code := cli(t, dir, "init", "--extra-file", "pom.xml"); code != 1 || !strings.Contains(out, "--extra-file") {
+		t.Errorf("bad extra file: exit %d\n%s", code, out)
+	}
+}

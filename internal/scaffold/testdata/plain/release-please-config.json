@@ -1,0 +1,17 @@
+{
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+  "include-component-in-tag": false,
+  "types": [
+    "feat",
+    "fix",
+    "chore",
+    "docs"
+  ],
+  "scopes": [],
+  "packages": {
+    ".": {
+      "component": "widget",
+      "changelog-path": "CHANGELOG.md"
+    }
+  }
+}

@@ -148,3 +148,42 @@ func TestApply_MissingJSONPathFailsLoudly(t *testing.T) {
 		t.Errorf("Apply error = %v, want it to name the file and the jsonpath", err)
 	}
 }
+
+// TestApply_VersionListedAsAnExtraFile: Release Please configs often list the
+// package's own VERSION as a generic extra file, and that VERSION may carry
+// no marker. The VERSION writer handles it; it is not run through the
+// generic updater, and other extra files still update.
+func TestApply_VersionListedAsAnExtraFile(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test in short mode")
+	}
+	dir := createTestRepo(t)
+	writeFile(t, dir, "release-please-config.json", `{"packages": {"engine": {"component": "engine", "extra-files": [
+		{"type": "generic", "path": "VERSION"},
+		{"type": "generic", "path": "version.go"}]}}}`)
+	writeFile(t, dir, "release-please-manifest.json", `{"engine": "1.0.0"}`)
+	writeFile(t, dir, "engine/VERSION", "1.0.0\n")
+	writeFile(t, dir, "engine/version.go", "const v = \"1.0.0\" // x-release-please-version\n")
+	runCmd(t, dir, "git", "add", "-A")
+	runCmd(t, dir, "git", "commit", "-m", "chore: initial commit")
+	writeFile(t, dir, "engine/main.go", "1\n")
+	runCmd(t, dir, "git", "add", "-A")
+	runCmd(t, dir, "git", "commit", "-m", "fix: repair")
+
+	result, err := Analyze(&Options{RepoPath: dir})
+	if err != nil {
+		t.Fatalf("Analyze: %v", err)
+	}
+	if files := BuildReleaseReport(result, "").Releases[0].Files; !reflect.DeepEqual(files, []string{"engine/VERSION", "engine/CHANGELOG.md", "engine/version.go"}) {
+		t.Errorf("report files = %v", files)
+	}
+	if err := Apply(result, false); err != nil {
+		t.Fatalf("Apply: %v", err)
+	}
+	if got := readRepoFile(t, dir, "engine/VERSION"); got != "1.0.1\n" {
+		t.Errorf("VERSION = %q", got)
+	}
+	if got := readRepoFile(t, dir, "engine/version.go"); !strings.Contains(got, `"1.0.1"`) {
+		t.Errorf("version.go = %q", got)
+	}
+}

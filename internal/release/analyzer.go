@@ -321,23 +321,38 @@ func (f Files) Paths() []string {
 // the VERSION rule depends on whether the file exists yet.
 //
 // A package's VERSION file is written when it already exists or when the
-// package has no extra-files. A package whose version of record lives in an
-// extra file (a package.json, say) does not grow a second version file.
+// package has no extra-files besides VERSION itself. A package whose version
+// of record lives in an extra file (a package.json, say) does not grow a
+// second version file.
 func PlannedFiles(repoRoot string, rel *PackageRelease) Files {
 	pkg := rel.Package
 	var files Files
 
+	extras := extraFiles(pkg)
 	versionFile := pkg.VersionFile()
-	if len(pkg.ExtraFiles) == 0 || fileExists(filepath.Join(repoRoot, filepath.FromSlash(versionFile))) {
+	if len(extras) == 0 || fileExists(filepath.Join(repoRoot, filepath.FromSlash(versionFile))) {
 		files.Version = versionFile
 	}
 	if len(rel.Commits) > 0 {
 		files.Changelog = pkg.ChangelogFile()
 	}
-	for _, extra := range pkg.ExtraFiles {
+	for _, extra := range extras {
 		files.Extra = append(files.Extra, pkg.RepoPath(extra.Path))
 	}
 	return files
+}
+
+// extraFiles returns pkg's extra-files except its own VERSION file. Release
+// Please configs often list VERSION as a generic extra file; the VERSION
+// writer owns it, and a plain VERSION has no marker for the generic updater.
+func extraFiles(pkg *config.Package) []config.ExtraFile {
+	var extras []config.ExtraFile
+	for _, extra := range pkg.ExtraFiles {
+		if pkg.RepoPath(extra.Path) != pkg.VersionFile() {
+			extras = append(extras, extra)
+		}
+	}
+	return extras
 }
 
 func fileExists(path string) bool {
@@ -368,7 +383,7 @@ func Apply(result *AnalysisResult, dryRun bool) error {
 			}
 		}
 
-		for _, extra := range rel.Package.ExtraFiles {
+		for _, extra := range extraFiles(rel.Package) {
 			if err := extrafile.Update(root, rel.Package, extra, rel.NewVersion); err != nil {
 				return fmt.Errorf("failed to update %s: %w", rel.Package.Component, err)
 			}

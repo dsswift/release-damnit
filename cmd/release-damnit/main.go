@@ -77,6 +77,9 @@ Options:
   --repo-url URL     Repository URL (auto-detected if not provided)
   --since SHA        Analyze every commit after SHA, the branch tip before the
                      push. Ignored when SHA is not an ancestor of HEAD.
+  --since-last-release
+                     Analyze each package from its last release tag. A package
+                     with no tag falls back to --since, or HEAD alone.
   --report-file PATH Write component release report JSON
   --verbose          Show detailed analysis output (unmatched directories, commit details)
   --version          Show version information

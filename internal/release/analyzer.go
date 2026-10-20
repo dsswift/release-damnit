@@ -51,6 +51,14 @@ type AnalysisResult struct {
 	// resolved to an ancestor of HEAD. Empty when HEAD alone chose the range.
 	Since string
 
+	// SinceLastRelease is set when each package was analyzed from its own
+	// last release tag (Options.SinceLastRelease).
+	SinceLastRelease bool
+
+	// Untagged lists the components whose last release tag was not found, so
+	// their range fell back to Since, or to HEAD alone.
+	Untagged []string
+
 	// Commits is the list of commits that were analyzed.
 	Commits []*git.Commit
 
@@ -86,6 +94,12 @@ type Options struct {
 	// Since..HEAD is analyzed, so a push of many commits releases all of them.
 	// Otherwise the range comes from HEAD alone.
 	Since string
+
+	// SinceLastRelease analyzes each package from the commit its current
+	// version's tag points at, so no commit after a release is missed, whatever
+	// pushes or runs came between. A package whose tag is missing falls back
+	// to Since, or to HEAD alone.
+	SinceLastRelease bool
 }
 
 // Analyze analyzes HEAD for releasable changes.
@@ -133,6 +147,19 @@ func Analyze(opts *Options) (*AnalysisResult, error) {
 		}
 	}
 
+	var untagged []string
+	var sinceTag map[string][]*git.Commit
+	if opts.SinceLastRelease {
+		fallback := "HEAD~1"
+		if hasSince {
+			fallback = since
+		}
+		commits, sinceTag, untagged, err = commitsSinceLastRelease(opts.RepoPath, cfg, fallback)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	// Map commits to packages and track stats
 	packageCommits := make(map[string][]*git.Commit)
 	matchedSHAs := make(map[string]bool)
@@ -155,6 +182,9 @@ func Analyze(opts *Options) (*AnalysisResult, error) {
 			matchedSHAs[commit.SHA] = true
 		}
 	}
+	if sinceTag != nil {
+		packageCommits = sinceTag
+	}
 
 	// Build stats
 	var orphanedDirs []string
@@ -174,16 +204,74 @@ func Analyze(opts *Options) (*AnalysisResult, error) {
 	releases := calculateReleases(cfg, packageCommits, opts.TreatPreMajorAsMinor)
 
 	result := &AnalysisResult{
-		MergeInfo: mergeInfo,
-		Since:     since,
-		Commits:   commits,
-		Releases:  releases,
-		Config:    cfg,
-		RepoURL:   opts.RepoURL,
-		Stats:     stats,
+		MergeInfo:        mergeInfo,
+		Since:            since,
+		SinceLastRelease: opts.SinceLastRelease,
+		Untagged:         untagged,
+		Commits:          commits,
+		Releases:         releases,
+		Config:           cfg,
+		RepoURL:          opts.RepoURL,
+		Stats:            stats,
 	}
 
 	return result, nil
+}
+
+// commitsSinceLastRelease returns, for each package, the commits after the
+// commit its current version's tag points at that touch it, plus the union of
+// every analyzed commit and the components whose tag is missing (their range
+// starts at fallback). Commits keep git's order, oldest first.
+func commitsSinceLastRelease(repoPath string, cfg *config.Config, fallback string) ([]*git.Commit, map[string][]*git.Commit, []string, error) {
+	byBase := make(map[string][]*git.Commit)
+	rangeFrom := func(base string) ([]*git.Commit, error) {
+		if commits, ok := byBase[base]; ok {
+			return commits, nil
+		}
+		commits, err := git.GetCommitsInRange(repoPath, base, "HEAD")
+		if err != nil {
+			if base != "HEAD~1" {
+				return nil, fmt.Errorf("failed to get commits since %s: %w", base, err)
+			}
+			// A repository with a single commit has no HEAD~1.
+			commits = nil
+		}
+		byBase[base] = commits
+		return commits, nil
+	}
+
+	perPackage := make(map[string][]*git.Commit)
+	seen := make(map[string]bool)
+	var all []*git.Commit
+	var untagged []string
+	for _, pkg := range cfg.PackagesSortedByPath() {
+		base := fallback
+		if pkg.CurrentVersion == "" {
+			untagged = append(untagged, pkg.Component)
+		} else if sha, ok := git.ResolvePushBase(repoPath, pkg.TagName(pkg.CurrentVersion)); ok {
+			base = sha
+		} else {
+			untagged = append(untagged, pkg.Component)
+		}
+
+		commits, err := rangeFrom(base)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+		for _, c := range commits {
+			if !seen[c.SHA] {
+				seen[c.SHA] = true
+				all = append(all, c)
+			}
+			for _, f := range c.Files {
+				if cfg.FindPackageForPath(f) == pkg {
+					perPackage[pkg.Path] = append(perPackage[pkg.Path], c)
+					break
+				}
+			}
+		}
+	}
+	return all, perPackage, untagged, nil
 }
 
 // calculateReleases determines which packages need releases and their version bumps.

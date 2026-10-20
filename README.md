@@ -23,15 +23,18 @@ New single repos get all of this from `release-damnit init`.
 ### As a GitHub Action
 
 ```yaml
-- uses: dsswift/release-damnit@v1
+- uses: dsswift/release-damnit@v1.4.0
   with:
     token: ${{ secrets.GITHUB_TOKEN }}
-    # Release every commit in the push, not just the tip.
-    since: ${{ github.event.before }}
+    # Release every commit since each package's last release.
+    since-last-release: 'true'
 ```
 
-`since` needs the checkout to reach that commit, so check out with
-`fetch-depth: 0`.
+Both `since-last-release` and `since` read history, so check out with
+`fetch-depth: 0`. `since: ${{ github.event.before }}` releases only the
+commits in the push instead; a commit a failed or skipped run missed is then
+never released. `since-last-release` reads from each package's last release
+tag, so nothing after a release is ever missed.
 
 ### As a CLI
 
@@ -58,6 +61,9 @@ release-damnit --create-releases
 
 # Analyze every commit after a given one, e.g. the branch tip before a push
 release-damnit --since 1a2b3c4 --dry-run
+
+# Analyze each package from its last release tag
+release-damnit --since-last-release --dry-run
 
 # Write the release report for a later step (publish reads it)
 release-damnit --since 1a2b3c4 --report-file report.json
@@ -286,7 +292,8 @@ This file is read to get current versions and updated with new versions.
 | `dry-run` | Only show what would change | `false` |
 | `create-releases` | Create GitHub releases (ignored when `publish` is on) | `true` |
 | `repo-url` | Repository URL | auto-detected |
-| `since` | Analyze every commit after this SHA, normally `github.event.before` | `''` |
+| `since` | Analyze every commit after this SHA, normally `github.event.before`. With `since-last-release`, only packages with no tag use it. | `''` |
+| `since-last-release` | Analyze each package from its last release tag | `false` |
 | `verbose` | Detailed analysis output | `false` |
 | `publish` | Commit the version files, tag that commit, push, then create releases | `false` |
 | `before-publish` | Shell command run after the versions are written and before the version commit, only when something is released. `RELEASE_REPORT` points at the report JSON. | `''` |
@@ -343,7 +350,7 @@ jobs:
       - id: release
         uses: dsswift/release-damnit@v1.4.0
         with:
-          since: ${{ github.event.before }}
+          since-last-release: 'true'
           publish: 'true'
           # A Node repo refreshes its lock file in the same commit:
           # before-publish: npm install --package-lock-only

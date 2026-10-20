@@ -12,10 +12,6 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
-    inputs:
-      since:
-        description: Release every commit after this SHA (default the commit before the push)
-        required: false
 
 permissions:
   contents: write
@@ -39,7 +35,7 @@ jobs:
       - id: release
         uses: USES
         with:
-          since: ${{ inputs.since || github.event.before }}
+          since-last-release: 'true'
           publish: 'true'
 
   build:

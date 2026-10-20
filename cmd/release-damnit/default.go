@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/dsswift/release-damnit/internal/git"
 	"github.com/dsswift/release-damnit/internal/release"
@@ -21,6 +22,7 @@ func runDefault() {
 	gitlabToken := flag.String("gitlab-token", os.Getenv("GITLAB_RELEASE_TOKEN"), "GitLab project access token (or GITLAB_RELEASE_TOKEN)")
 	repoURL := flag.String("repo-url", "", "GitHub repository URL (auto-detected if not provided)")
 	since := flag.String("since", "", "Analyze every commit after this one (the branch tip before the push)")
+	sinceLastRelease := flag.Bool("since-last-release", false, "Analyze each package from its last release tag")
 	verbose := flag.Bool("verbose", false, "Show detailed analysis output")
 	showVersion := flag.Bool("version", false, "Show version information")
 	reportFile := flag.String("report-file", "", "Write the component release report JSON to this file")
@@ -56,6 +58,7 @@ func runDefault() {
 		RepoURL:              *repoURL,
 		TreatPreMajorAsMinor: true, // Default behavior for pre-1.0 packages
 		Since:                *since,
+		SinceLastRelease:     *sinceLastRelease,
 	}
 
 	result, err := release.Analyze(opts)
@@ -65,6 +68,9 @@ func runDefault() {
 
 	if *since != "" && result.Since == "" {
 		fmt.Printf("--since %s is not an ancestor of HEAD; analyzing HEAD alone\n", *since)
+	}
+	if len(result.Untagged) > 0 {
+		fmt.Printf("No release tag for %s; analyzing from --since, or HEAD alone\n", strings.Join(result.Untagged, ", "))
 	}
 
 	// Print analysis results
@@ -133,7 +139,9 @@ func runDefault() {
 }
 
 func printAnalysis(result *release.AnalysisResult, verbose bool) {
-	if result.Since != "" {
+	if result.SinceLastRelease {
+		fmt.Printf("Analyzing each package since its last release (%d commits)\n", len(result.Commits))
+	} else if result.Since != "" {
 		fmt.Printf("Analyzing push %s..%s (%d commits)\n",
 			result.Since[:7], result.MergeInfo.HeadSHA[:7], len(result.Commits))
 	} else if result.MergeInfo.IsMerge {

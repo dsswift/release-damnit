@@ -770,3 +770,60 @@ func gitOutput(t *testing.T, dir string, args ...string) string {
 	}
 	return strings.TrimSpace(string(out))
 }
+
+func TestAnalyze_SinceLastReleaseCoversEveryCommitAfterTheTag(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test in short mode")
+	}
+
+	dir := setupBasicRepo(t)
+	runCmd(t, dir, "git", "tag", "service-a-v0.1.0")
+
+	// Two commits after the release, landed by separate pushes: a push-range
+	// analysis of the second would miss the first.
+	writeFile(t, dir, "workloads/service-a/src/a.go", "// a\n")
+	runCmd(t, dir, "git", "add", "-A")
+	runCmd(t, dir, "git", "commit", "-m", "feat(service-a): add a")
+	writeFile(t, dir, "workloads/service-a/src/b.go", "// b\n")
+	runCmd(t, dir, "git", "add", "-A")
+	runCmd(t, dir, "git", "commit", "-m", "fix(service-a): fix b")
+
+	result, err := Analyze(&Options{RepoPath: dir, DryRun: true, SinceLastRelease: true, TreatPreMajorAsMinor: true})
+	if err != nil {
+		t.Fatalf("Analyze failed: %v", err)
+	}
+	if len(result.Untagged) != 0 {
+		t.Errorf("Untagged = %v, want none", result.Untagged)
+	}
+	if len(result.Releases) != 1 || len(result.Releases[0].Commits) != 2 {
+		t.Fatalf("want one release carrying both commits, got %#v", result.Releases)
+	}
+	if got := result.Releases[0].NewVersion; got != "0.1.1" {
+		t.Errorf("NewVersion = %s, want 0.1.1 (pre-1.0 feat is a patch)", got)
+	}
+}
+
+func TestAnalyze_SinceLastReleaseFallsBackWithoutATag(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test in short mode")
+	}
+
+	dir := setupBasicRepo(t)
+	writeFile(t, dir, "workloads/service-a/src/a.go", "// a\n")
+	runCmd(t, dir, "git", "add", "-A")
+	runCmd(t, dir, "git", "commit", "-m", "feat(service-a): add a")
+	writeFile(t, dir, "workloads/service-a/src/b.go", "// b\n")
+	runCmd(t, dir, "git", "add", "-A")
+	runCmd(t, dir, "git", "commit", "-m", "fix(service-a): fix b")
+
+	result, err := Analyze(&Options{RepoPath: dir, DryRun: true, SinceLastRelease: true, TreatPreMajorAsMinor: true})
+	if err != nil {
+		t.Fatalf("Analyze failed: %v", err)
+	}
+	if strings.Join(result.Untagged, ",") != "service-a" {
+		t.Errorf("Untagged = %v, want [service-a]", result.Untagged)
+	}
+	if len(result.Releases) != 1 || len(result.Releases[0].Commits) != 1 {
+		t.Fatalf("want HEAD alone (one commit), got %#v", result.Releases)
+	}
+}

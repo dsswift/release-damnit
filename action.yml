@@ -27,6 +27,10 @@ inputs:
     description: 'Analyze every commit after this SHA, normally github.event.before. Ignored when it is not an ancestor of HEAD.'
     required: false
     default: ''
+  since-last-release:
+    description: 'Analyze each package from its last release tag instead of a push range (since then only covers packages with no tag)'
+    required: false
+    default: 'false'
   verbose:
     description: 'Show detailed analysis output (unmatched directories, commit details)'
     required: false
@@ -99,6 +103,7 @@ runs:
         INPUT_CREATE_RELEASES: ${{ inputs.create-releases }}
         INPUT_REPO_URL: ${{ inputs.repo-url }}
         INPUT_SINCE: ${{ inputs.since }}
+        INPUT_SINCE_LAST_RELEASE: ${{ inputs.since-last-release }}
         INPUT_VERBOSE: ${{ inputs.verbose }}
         INPUT_PUBLISH: ${{ inputs.publish }}
         INPUT_BEFORE_PUBLISH: ${{ inputs.before-publish }}
@@ -116,6 +121,9 @@ runs:
         fi
         if [ -n "$INPUT_SINCE" ]; then
           FLAGS+=(--since "$INPUT_SINCE")
+        fi
+        if [ "$INPUT_SINCE_LAST_RELEASE" = "true" ]; then
+          FLAGS+=(--since-last-release)
         fi
         if [ "$INPUT_VERBOSE" = "true" ]; then
           FLAGS+=(--verbose)

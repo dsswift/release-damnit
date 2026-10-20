@@ -107,7 +107,7 @@ The scope must match the files:
 
 | The commit's files touch | Scope |
 |--------------------------|-------|
-| One package | That package's `component`. Empty is fine when the config has only one package. |
+| One package | That package's `commit-scope`, else its `component`. Empty is fine when the config has only one package. |
 | More than one package | Fails. Split it into one commit per package. |
 | No package | One of `scopes`. Required when the config has more than one package. |
 
@@ -215,6 +215,7 @@ release-damnit uses your existing Release Please configuration files unchanged:
 |-----|-------|---------|
 | `packages` | top | Map of path to package. A file belongs to the deepest package whose path contains it. |
 | `component` | package | The package name in tags, releases, and commit scopes. |
+| `commit-scope` | package | The commit scope when it should differ from `component`, e.g. component `sdk/go` committed as `sdk`. |
 | `changelog-path` | package | Changelog path relative to the package (default `CHANGELOG.md`). |
 | `tag-separator` | top or package | Between component and version in the tag (default `-`, so `jarvis-v1.2.3`). |
 | `include-component-in-tag` | top or package | `false` makes tags bare: `v1.2.3`. Default `true`. The package value wins. |

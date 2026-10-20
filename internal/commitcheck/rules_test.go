@@ -12,6 +12,7 @@ func monorepo() *config.Config {
 		Packages: map[string]*config.Package{
 			"apps/web": {Path: "apps/web", Component: "web"},
 			"apps/api": {Path: "apps/api", Component: "api"},
+			"sdk/go":   {Path: "sdk/go", Component: "sdk/go", CommitScope: "sdk"},
 		},
 		Scopes:           []string{"repo", "docs", "ci"},
 		Types:            config.DefaultTypes,
@@ -49,6 +50,8 @@ func TestCheck(t *testing.T) {
 		{name: "release-please style release commit", rules: mono, message: "chore(release): 1.3.0", skipped: true},
 
 		// Header rules.
+		{name: "commit-scope replaces the component", rules: mono, message: "fix(sdk): retry", files: []string{"sdk/go/client.go"}},
+		{name: "component rejected when commit-scope set", rules: mono, message: "fix(sdk/go): retry", files: []string{"sdk/go/client.go"}, want: `use "sdk"`},
 		{name: "good scoped header", rules: mono, message: "feat(web): add a page", files: []string{"apps/web/page.tsx"}},
 		{name: "comments and blank lines ignored", rules: mono, message: "\n# Please enter the commit message\nfix(api): handle nil\n\nbody\n# comment\n", files: []string{"apps/api/x.go"}},
 		{name: "not conventional", rules: none, message: "Add a page", want: "must look like type(scope): description"},

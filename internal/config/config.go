@@ -96,6 +96,18 @@ type Package struct {
 	// ExtraFiles are further files carrying this package's version, with
 	// paths relative to the package path.
 	ExtraFiles []ExtraFile
+
+	// CommitScope is the commit scope for this package when it differs from
+	// the component, e.g. a component "sdk/go" committed under "sdk".
+	CommitScope string
+}
+
+// Scope is the commit scope a commit touching this package must carry.
+func (p *Package) Scope() string {
+	if p.CommitScope != "" {
+		return p.CommitScope
+	}
+	return p.Component
 }
 
 // releasePleaseConfig represents the JSON structure of release-please-config.json.
@@ -121,6 +133,7 @@ type packageConfig struct {
 	TagSeparator          *string     `json:"tag-separator"`
 	IncludeComponentInTag *bool       `json:"include-component-in-tag"`
 	ExtraFiles            []ExtraFile `json:"extra-files"`
+	CommitScope           string      `json:"commit-scope"`
 }
 
 type pluginConfig struct {
@@ -226,6 +239,7 @@ func Load(repoRoot string) (*Config, error) {
 			TagSeparator:         resolveTagSeparator(rpConfig.TagSeparator, pkgConfig.TagSeparator),
 			OmitComponentFromTag: !resolveIncludeComponent(rpConfig.IncludeComponentInTag, pkgConfig.IncludeComponentInTag),
 			ExtraFiles:           pkgConfig.ExtraFiles,
+			CommitScope:          pkgConfig.CommitScope,
 		}
 
 		// Default changelog path

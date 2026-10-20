@@ -471,3 +471,20 @@ func TestResolveTagSeparator(t *testing.T) {
 		})
 	}
 }
+
+func TestLoad_CommitScope(t *testing.T) {
+	dir := createTestRepo(t,
+		`{"packages": {"sdk/go": {"component": "sdk/go", "commit-scope": "sdk"}, "engine": {"component": "engine"}}}`,
+		`{"sdk/go": "1.0.0", "engine": "1.0.0"}`)
+
+	cfg, err := Load(dir)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if got := cfg.Packages["sdk/go"].Scope(); got != "sdk" {
+		t.Errorf("sdk/go Scope = %q, want sdk", got)
+	}
+	if got := cfg.Packages["engine"].Scope(); got != "engine" {
+		t.Errorf("engine Scope = %q, want the component", got)
+	}
+}

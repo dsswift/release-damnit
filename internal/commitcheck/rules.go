@@ -177,13 +177,13 @@ func checkScope(rules Rules, h Header, files []string) []string {
 
 	case 1:
 		for pkg, pkgFiles := range byPackage {
-			if h.Scope == pkg.Component || (h.Scope == "" && single) {
+			if h.Scope == pkg.Scope() || (h.Scope == "" && single) {
 				return nil
 			}
 			if h.Scope == "" {
-				return []string{fmt.Sprintf("add the scope %q: this commit changes that package (%s)", pkg.Component, summarize(pkgFiles))}
+				return []string{fmt.Sprintf("add the scope %q: this commit changes that package (%s)", pkg.Scope(), summarize(pkgFiles))}
 			}
-			return []string{fmt.Sprintf("scope %q does not match the package this commit changes; use %q (%s)", h.Scope, pkg.Component, summarize(pkgFiles))}
+			return []string{fmt.Sprintf("scope %q does not match the package this commit changes; use %q (%s)", h.Scope, pkg.Scope(), summarize(pkgFiles))}
 		}
 	}
 
@@ -191,12 +191,12 @@ func checkScope(rules Rules, h Header, files []string) []string {
 	for pkg := range byPackage {
 		packages = append(packages, pkg)
 	}
-	sort.Slice(packages, func(i, j int) bool { return packages[i].Component < packages[j].Component })
+	sort.Slice(packages, func(i, j int) bool { return packages[i].Scope() < packages[j].Scope() })
 
 	var b strings.Builder
 	fmt.Fprintf(&b, "this commit changes %d packages; split into one commit per package:", len(packages))
 	for _, pkg := range packages {
-		fmt.Fprintf(&b, "\n  %s: %s", pkg.Component, strings.Join(byPackage[pkg], ", "))
+		fmt.Fprintf(&b, "\n  %s: %s", pkg.Scope(), strings.Join(byPackage[pkg], ", "))
 	}
 	return []string{b.String()}
 }

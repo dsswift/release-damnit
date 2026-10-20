@@ -3,7 +3,7 @@
 # Build settings
 BINARY_NAME=release-damnit
 BUILD_DIR=build
-VERSION=$(shell cat VERSION 2>/dev/null || echo "0.0.0")
+VERSION ?= $(shell cat VERSION 2>/dev/null || echo "0.0.0")
 GIT_SHA=$(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 LDFLAGS=-ldflags "-X main.version=${VERSION} -X main.gitSha=${GIT_SHA}"
 
@@ -22,6 +22,7 @@ build:
 build-all:
 	@mkdir -p $(BUILD_DIR)
 	GOOS=linux GOARCH=amd64 go build $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME)-linux-amd64 ./cmd/release-damnit
+	GOOS=linux GOARCH=arm64 go build $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME)-linux-arm64 ./cmd/release-damnit
 	GOOS=darwin GOARCH=amd64 go build $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME)-darwin-amd64 ./cmd/release-damnit
 	GOOS=darwin GOARCH=arm64 go build $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME)-darwin-arm64 ./cmd/release-damnit
 	GOOS=windows GOARCH=amd64 go build $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME)-windows-amd64.exe ./cmd/release-damnit

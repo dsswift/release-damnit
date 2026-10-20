@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [1.4.1](https://github.com/dsswift/release-damnit/compare/v1.4.0...v1.4.1) (2026-10-20)
+
+### Bug Fixes
+
+* report the module version from go install ([2e762fd](https://github.com/dsswift/release-damnit/commit/2e762fd89b70cebccfbe29006ece624befea9dc5))
+
 ## [1.4.0](https://github.com/dsswift/release-damnit/compare/v1.3.0...v1.4.0) (2026-10-20)
 
 ### Features

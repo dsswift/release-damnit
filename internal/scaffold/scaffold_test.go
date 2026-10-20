@@ -154,3 +154,52 @@ func TestRun_RejectsABadVersion(t *testing.T) {
 		t.Error("accepted --version one")
 	}
 }
+
+func TestRun_GitLab(t *testing.T) {
+	dir := newRepo(t, "service")
+	result, err := Run(Options{Dir: dir, Version: "0.3.0", Forge: ForgeGitLab})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	want := []string{"release-please-config.json", "release-please-manifest.json", "VERSION", "CHANGELOG.md", ".gitlab-ci.yml", ".gitlab/build.yml"}
+	if !reflect.DeepEqual(result.Written, want) {
+		t.Errorf("written = %v, want %v", result.Written, want)
+	}
+	assertGolden(t, dir, ".gitlab-ci.yml", "gitlab-ci.yml")
+	assertGolden(t, dir, ".gitlab/build.yml", "gitlab-build.yml")
+	if _, err := os.Stat(filepath.Join(dir, ".github")); !os.IsNotExist(err) {
+		t.Errorf("a GitLab repo got a .github directory (err %v)", err)
+	}
+}
+
+func TestRun_GitLabKeepsTheRepoBuildAndRefusesAnExistingPipeline(t *testing.T) {
+	dir := newRepo(t, "service")
+	if err := os.MkdirAll(filepath.Join(dir, ".gitlab"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	build := "build:\n  script: [make release]\n"
+	if err := os.WriteFile(filepath.Join(dir, ".gitlab/build.yml"), []byte(build), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, ".gitlab-ci.yml"), []byte("stages: [test]\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := Run(Options{Dir: dir, Version: "1.0.0", Forge: ForgeGitLab}); !errors.Is(err, ErrExists) || !strings.Contains(err.Error(), ".gitlab-ci.yml") {
+		t.Fatalf("err = %v, want ErrExists naming .gitlab-ci.yml", err)
+	}
+	if _, err := Run(Options{Dir: dir, Version: "1.0.0", Forge: ForgeGitLab, Force: true}); err != nil {
+		t.Fatalf("Run --force: %v", err)
+	}
+	got, _ := os.ReadFile(filepath.Join(dir, ".gitlab/build.yml"))
+	if string(got) != build {
+		t.Errorf("the repo's own build was overwritten:\n%s", got)
+	}
+	assertGolden(t, dir, ".gitlab-ci.yml", "gitlab-ci.yml")
+}
+
+func TestRun_RejectsAnUnknownForge(t *testing.T) {
+	if _, err := Run(Options{Dir: newRepo(t, "x"), Version: "1.0.0", Forge: "bitbucket"}); err == nil || !strings.Contains(err.Error(), `forge "bitbucket"`) {
+		t.Errorf("err = %v", err)
+	}
+}

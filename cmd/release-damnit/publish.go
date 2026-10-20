@@ -29,6 +29,7 @@ func runPublish(args []string) int {
 	provider := fs.String("provider", "auto", "Release provider: auto, github, or gitlab")
 	gitlabToken := fs.String("gitlab-token", os.Getenv("GITLAB_RELEASE_TOKEN"), "GitLab project access token (or GITLAB_RELEASE_TOKEN)")
 	attempts := fs.Int("attempts", 5, "Pushes to try when the branch keeps moving")
+	skipCI := fs.String("skip-ci", string(publish.SkipCIMessage), "How the version commit skips CI: message ([skip ci] in the message) or push-option (git push -o ci.skip; use on GitLab, where the marker also skips tag pipelines)")
 	var add pathList
 	fs.Var(&add, "add", "Another changed file to put in the version commit (repeatable)")
 	fs.Usage = func() {
@@ -67,6 +68,7 @@ Options:`)
 		Add:        add,
 		RepoURL:    repoURL,
 		Out:        os.Stderr,
+		SkipCI:     publish.SkipCI(*skipCI),
 		CreateReleases: func(result *release.AnalysisResult) error {
 			return createProviderReleases(result, *provider, repoURL, wd, *gitlabToken)
 		},

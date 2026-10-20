@@ -210,8 +210,18 @@ func TestCLI_Init(t *testing.T) {
 	if out, code := cli(t, dir, "init"); code != 1 || !strings.Contains(out, "files already exist") {
 		t.Errorf("second init: exit %d\n%s", code, out)
 	}
-	if out, code := cli(t, dir, "init", "--forge", "gitlab"); code != 1 || !strings.Contains(out, "gitlab scaffolding is not built yet; set the repo up by hand from the standard") {
-		t.Errorf("gitlab: exit %d\n%s", code, out)
+	if out, code := cli(t, dir, "init", "--forge", "bitbucket"); code != 1 || !strings.Contains(out, "use github or gitlab") {
+		t.Errorf("unknown forge: exit %d\n%s", code, out)
+	}
+	lab := newRepo(t)
+	out, code = cli(t, lab, "init", "--forge", "gitlab", "--version", "0.1.0")
+	if code != 0 {
+		t.Fatalf("gitlab: exit %d:\n%s", code, out)
+	}
+	for _, want := range []string{"wrote .gitlab-ci.yml", "wrote .gitlab/build.yml", "GITLAB_RELEASE_TOKEN", "installed the commit-msg hook"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("gitlab output lacks %q:\n%s", want, out)
+		}
 	}
 	if out, code := cli(t, dir, "init", "--extra-file", "pom.xml"); code != 1 || !strings.Contains(out, "--extra-file") {
 		t.Errorf("bad extra file: exit %d\n%s", code, out)

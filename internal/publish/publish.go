@@ -49,7 +49,22 @@ type Options struct {
 
 	// Out receives progress lines and git's own output.
 	Out io.Writer
+
+	// SkipCI picks how the version commit's push stays out of CI: SkipCIMessage
+	// (the default) puts "[skip ci]" in the message; SkipCIPushOption pushes
+	// the commit with "-o ci.skip" instead. GitLab skips every pipeline for a
+	// commit whose message carries the marker, tag pipelines included, so a
+	// repo that builds from tag pipelines needs the push option.
+	SkipCI SkipCI
 }
+
+// SkipCI is how a version commit's push avoids running CI again.
+type SkipCI string
+
+const (
+	SkipCIMessage    SkipCI = "message"
+	SkipCIPushOption SkipCI = "push-option"
+)
 
 // Tag is one pushed release tag.
 type Tag struct {
@@ -83,6 +98,13 @@ func Run(opts Options) (Outcome, error) {
 	}
 	if opts.Out == nil {
 		opts.Out = io.Discard
+	}
+	switch opts.SkipCI {
+	case "":
+		opts.SkipCI = SkipCIMessage
+	case SkipCIMessage, SkipCIPushOption:
+	default:
+		return Outcome{}, fmt.Errorf("skip-ci %q: use %s or %s", opts.SkipCI, SkipCIMessage, SkipCIPushOption)
 	}
 
 	report, err := readReport(opts.ReportFile)
@@ -119,7 +141,7 @@ func Run(opts Options) (Outcome, error) {
 	if err != nil {
 		return Outcome{}, err
 	}
-	if err := p.commit(files, commitMessage(releases)); err != nil {
+	if err := p.commit(files, commitMessage(releases, opts.SkipCI == SkipCIMessage)); err != nil {
 		return Outcome{}, err
 	}
 	if err := p.tag(tags, false); err != nil {
@@ -266,16 +288,23 @@ func (p *publisher) commit(files []string, message string) error {
 }
 
 // commitMessage names every release. A lone release whose tag carries no
-// component names only the version, matching its tag.
-func commitMessage(releases []*release.PackageRelease) string {
+// component names only the version, matching its tag. marker appends
+// "[skip ci]".
+func commitMessage(releases []*release.PackageRelease, marker bool) string {
+	var msg string
 	if len(releases) == 1 && releases[0].Package.OmitComponentFromTag {
-		return fmt.Sprintf("chore: release v%s [skip ci]", releases[0].NewVersion)
+		msg = fmt.Sprintf("chore: release v%s", releases[0].NewVersion)
+	} else {
+		parts := make([]string, len(releases))
+		for i, rel := range releases {
+			parts[i] = fmt.Sprintf("%s v%s", rel.Package.Component, rel.NewVersion)
+		}
+		msg = "chore: release " + strings.Join(parts, ", ")
 	}
-	parts := make([]string, len(releases))
-	for i, rel := range releases {
-		parts[i] = fmt.Sprintf("%s v%s", rel.Package.Component, rel.NewVersion)
+	if marker {
+		msg += " [skip ci]"
 	}
-	return "chore: release " + strings.Join(parts, ", ") + " [skip ci]"
+	return msg
 }
 
 // tag creates an annotated tag per release at HEAD; move replaces tags that
@@ -308,7 +337,11 @@ func (p *publisher) tag(tags []Tag, move bool) error {
 func (p *publisher) pushCommit(tags []Tag) (string, error) {
 	for attempt := 1; ; attempt++ {
 		p.logf("attempt %d/%d: pushing the version commit to %s/%s", attempt, p.Attempts, p.Remote, p.Branch)
-		if err := git.Stream(p.root, p.Out, "push", p.Remote, "HEAD:refs/heads/"+p.Branch); err == nil {
+		push := []string{"push"}
+		if p.SkipCI == SkipCIPushOption {
+			push = append(push, "-o", "ci.skip")
+		}
+		if err := git.Stream(p.root, p.Out, append(push, p.Remote, "HEAD:refs/heads/"+p.Branch)...); err == nil {
 			return p.git("rev-parse", "HEAD")
 		}
 

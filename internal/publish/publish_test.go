@@ -310,3 +310,52 @@ func TestWriteGitHubOutput(t *testing.T) {
 		t.Errorf("got\n%s\nwant\n%s", data, want)
 	}
 }
+
+func TestPublish_PushOptionSkipsCIWithoutTheMessageMarker(t *testing.T) {
+	c := newCI(t, singleRepo, `{".": "1.0.0"}`, singleRepoFiles())
+	// The remote records the push options of each ref it receives.
+	run(t, c.remote, "config", "receive.advertisePushOptions", "true")
+	log := filepath.Join(t.TempDir(), "pushes.log")
+	write(t, c.remote, "hooks/pre-receive", `#!/bin/sh
+opts=""
+i=0
+while [ "$i" -lt "${GIT_PUSH_OPTION_COUNT:-0}" ]; do
+  eval "opts=\"$opts \$GIT_PUSH_OPTION_$i\""
+  i=$((i + 1))
+done
+while read -r old new ref; do echo "$ref:$opts" >> "`+log+`"; done
+`)
+	commit(t, c.checkout, "feature.go", "package main\n", "feat: add a feature")
+	run(t, c.checkout, "push", "-q", "origin", "main")
+	report := analyze(t, c.checkout, "")
+
+	var out bytes.Buffer
+	_, err := Run(Options{Dir: c.checkout, ReportFile: report, Attempts: 5, Out: &out, SkipCI: SkipCIPushOption})
+	if err != nil {
+		t.Fatalf("publish: %v\n%s", err, out.String())
+	}
+
+	if subject := run(t, c.remote, "log", "-1", "--format=%s", "main"); subject != "chore: release v1.1.0" {
+		t.Errorf("version commit subject = %q, want no [skip ci] marker", subject)
+	}
+	data, err := os.ReadFile(log)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pushes := string(data)
+	if !strings.Contains(pushes, "refs/heads/main: ci.skip") {
+		t.Errorf("the version commit was not pushed with ci.skip:\n%s", pushes)
+	}
+	if !strings.Contains(pushes, "refs/tags/v1.1.0:\n") {
+		t.Errorf("the tag push must carry no options, so the tag pipeline runs:\n%s", pushes)
+	}
+}
+
+func TestPublish_RejectsAnUnknownSkipCI(t *testing.T) {
+	c := newCI(t, singleRepo, `{".": "1.0.0"}`, singleRepoFiles())
+	commit(t, c.checkout, "feature.go", "package main\n", "feat: add a feature")
+	report := analyze(t, c.checkout, "")
+	if _, err := Run(Options{Dir: c.checkout, ReportFile: report, SkipCI: "never"}); err == nil || !strings.Contains(err.Error(), `skip-ci "never"`) {
+		t.Errorf("err = %v, want the unknown skip-ci refused", err)
+	}
+}

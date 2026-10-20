@@ -161,7 +161,9 @@ release-damnit publish --report-file report.json --add package-lock.json
 3. It pushes the commit, then the tags. When the branch moved, it rebases the version commit onto the new tip, moves the tags, and retries.
 4. It creates the GitHub or GitLab releases on the pushed tags.
 
-A report with no releases does nothing. Options: `--report-file` (required), `--remote` (`origin`), `--branch` (`main`), `--provider` (`auto`, `github`, `gitlab`), `--gitlab-token` (or `GITLAB_RELEASE_TOKEN`), `--attempts` (5), `--add <path>` (repeatable).
+A report with no releases does nothing. Options: `--report-file` (required), `--remote` (`origin`), `--branch` (`main`), `--provider` (`auto`, `github`, `gitlab`), `--gitlab-token` (or `GITLAB_RELEASE_TOKEN`), `--attempts` (5), `--add <path>` (repeatable), `--skip-ci` (`message` or `push-option`).
+
+`--skip-ci push-option` leaves `[skip ci]` out of the message and pushes the version commit with `git push -o ci.skip` instead. Use it on GitLab: there the marker skips every pipeline for that commit, so the tag pipeline that builds the release would never run.
 
 When `GITHUB_OUTPUT` is set, publish writes `released`, `tag` and `version` (of the first release), `tags` (space-separated), and `<component>--tag_name` and `<component>--version` per release.
 
@@ -172,17 +174,20 @@ release-damnit init
 release-damnit init --component web-app --extra-file 'json:package.json:$.version'
 ```
 
-For a single GitHub repo, init writes:
+For a single repo, init writes:
 
 - `release-please-config.json`: one root package with bare `v1.2.3` tags.
 - `release-please-manifest.json`: the current version.
 - `VERSION`, unless an extra file carries the version.
 - `CHANGELOG.md`, when missing.
-- `.github/workflows/release.yml`: versions and publishes on push to main, then calls `.github/workflows/build.yml` with the new tag.
+- On GitHub (`--forge github`, the default): `.github/workflows/release.yml`, which versions and publishes on push to main, then calls `.github/workflows/build.yml` with the new tag. `build.yml` is the repo's own build: a `workflow_call` workflow that takes a string input `tag` and checks out that tag.
+- On GitLab (`--forge gitlab`): `.gitlab-ci.yml`, whose `release` job downloads the release-damnit binary, versions every package since its last release, and publishes with `--provider gitlab --skip-ci push-option`. The new tag starts a tag pipeline that runs `.gitlab/build.yml`, the repo's own build (`$CI_COMMIT_TAG` is the release tag). init writes a starting `.gitlab/build.yml` only when the repo has none.
 
-Then it installs the hook. `build.yml` is the repo's own build: a `workflow_call` workflow that takes a string input `tag` and checks out that tag.
+Then it installs the hook.
 
-Options: `--component` (default: the repo directory name), `--version` (default: the highest `v*` tag that is not a prerelease, else `package.json`'s version, else 0.0.0), `--extra-file` (repeatable; `json:<path>:<jsonpath>` or `generic:<path>`), `--force` (overwrite existing files; without it init lists them and stops). `--forge gitlab` is not built yet.
+A GitLab repo needs one masked CI/CD variable, `GITLAB_RELEASE_TOKEN`: a project access token with the `api` and `write_repository` scopes and a role allowed to push to the default branch. The job pushes the version commit and tags with it and creates the release through the API.
+
+Options: `--component` (default: the repo directory name), `--version` (default: the highest `v*` tag that is not a prerelease, else `package.json`'s version, else 0.0.0), `--extra-file` (repeatable; `json:<path>:<jsonpath>` or `generic:<path>`), `--force` (overwrite existing files; without it init lists them and stops), `--forge` (`github` or `gitlab`).
 
 ## Configuration
 

@@ -1,6 +1,6 @@
-// Package scaffold writes the release setup for a single-package GitHub
-// repo: the release-please config and manifest, the version file, the
-// changelog, and the release workflow.
+// Package scaffold writes the release setup for a single-package repo on
+// GitHub or GitLab: the release-please config and manifest, the version file,
+// the changelog, and the release pipeline.
 package scaffold
 
 import (
@@ -42,7 +42,22 @@ type Options struct {
 
 	// ActionRef is the action the workflow uses. Empty means DefaultActionRef.
 	ActionRef string
+
+	// Forge picks the pipeline written. Empty means ForgeGitHub.
+	Forge Forge
+
+	// ReleaseDamnitVersion is the binary a GitLab pipeline downloads. Empty
+	// means DefaultReleaseDamnitVersion.
+	ReleaseDamnitVersion string
 }
+
+// Forge is where the repository is hosted.
+type Forge string
+
+const (
+	ForgeGitHub Forge = "github"
+	ForgeGitLab Forge = "gitlab"
+)
 
 // ErrExists is returned when a file would be overwritten without Force.
 var ErrExists = errors.New("files already exist")
@@ -83,6 +98,24 @@ func Run(opts Options) (Result, error) {
 	if opts.ActionRef == "" {
 		opts.ActionRef = DefaultActionRef
 	}
+	if opts.ReleaseDamnitVersion == "" {
+		opts.ReleaseDamnitVersion = DefaultReleaseDamnitVersion
+	}
+	if opts.Forge == "" {
+		opts.Forge = ForgeGitHub
+	}
+	var pipeline []file
+	switch opts.Forge {
+	case ForgeGitHub:
+		pipeline = []file{{path: WorkflowPath, content: []byte(ReleaseWorkflow(opts.ActionRef))}}
+	case ForgeGitLab:
+		pipeline = []file{
+			{path: GitLabCIPath, content: []byte(GitLabCI(opts.ReleaseDamnitVersion))},
+			{path: GitLabBuildPath, content: []byte(GitLabBuild()), keep: true},
+		}
+	default:
+		return Result{}, fmt.Errorf("forge %q: use %s or %s", opts.Forge, ForgeGitHub, ForgeGitLab)
+	}
 
 	configJSON, err := ConfigJSON(result.Component, opts.ExtraFiles)
 	if err != nil {
@@ -95,10 +128,8 @@ func Run(opts Options) (Result, error) {
 	if len(opts.ExtraFiles) == 0 {
 		files = append(files, file{path: "VERSION", content: []byte(result.Version + "\n")})
 	}
-	files = append(files,
-		file{path: "CHANGELOG.md", content: []byte(changelog.InitialChangelog()), keep: true},
-		file{path: WorkflowPath, content: []byte(ReleaseWorkflow(opts.ActionRef))},
-	)
+	files = append(files, file{path: "CHANGELOG.md", content: []byte(changelog.InitialChangelog()), keep: true})
+	files = append(files, pipeline...)
 
 	var existing []string
 	for _, f := range files {

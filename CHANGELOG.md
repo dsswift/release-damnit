@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [1.5.1](https://github.com/dsswift/release-damnit/compare/v1.5.0...v1.5.1) (2026-10-20)
+
+### Bug Fixes
+
+* pin the gitlab pipeline's release-damnit version ([be877a1](https://github.com/dsswift/release-damnit/commit/be877a179d84af02adf8a818c1a8ac405f37622e))
+
 ## [1.5.0](https://github.com/dsswift/release-damnit/compare/v1.4.2...v1.5.0) (2026-10-20)
 
 ### Features

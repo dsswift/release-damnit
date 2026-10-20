@@ -11,6 +11,7 @@ import (
 
 	"github.com/dsswift/release-damnit/internal/changelog"
 	"github.com/dsswift/release-damnit/internal/config"
+	"github.com/dsswift/release-damnit/internal/extrafile"
 	"github.com/dsswift/release-damnit/internal/git"
 	"github.com/dsswift/release-damnit/internal/version"
 	"github.com/dsswift/release-damnit/pkg/contracts"
@@ -289,45 +290,100 @@ func createRelease(pkg *config.Package, commits []*git.Commit, bumpType version.
 	}
 }
 
-// Apply writes the version updates, changelogs, and manifest updates.
+// Files lists, relative to the repo root, the files Apply writes for one
+// release: its VERSION file, its changelog, and its extra-files. The manifest
+// is shared by every release and is not included.
+type Files struct {
+	// Version is the VERSION file, or empty when Apply does not write one.
+	Version string
+
+	// Changelog is the changelog, or empty when the release has no commits
+	// of its own (a linked bump).
+	Changelog string
+
+	// Extra are the package's extra-files.
+	Extra []string
+}
+
+// Paths returns every file in f.
+func (f Files) Paths() []string {
+	var paths []string
+	if f.Version != "" {
+		paths = append(paths, f.Version)
+	}
+	if f.Changelog != "" {
+		paths = append(paths, f.Changelog)
+	}
+	return append(paths, f.Extra...)
+}
+
+// PlannedFiles reports what Apply will write for rel. Call it before Apply:
+// the VERSION rule depends on whether the file exists yet.
+//
+// A package's VERSION file is written when it already exists or when the
+// package has no extra-files. A package whose version of record lives in an
+// extra file (a package.json, say) does not grow a second version file.
+func PlannedFiles(repoRoot string, rel *PackageRelease) Files {
+	pkg := rel.Package
+	var files Files
+
+	versionFile := pkg.VersionFile()
+	if len(pkg.ExtraFiles) == 0 || fileExists(filepath.Join(repoRoot, filepath.FromSlash(versionFile))) {
+		files.Version = versionFile
+	}
+	if len(rel.Commits) > 0 {
+		files.Changelog = pkg.ChangelogFile()
+	}
+	for _, extra := range pkg.ExtraFiles {
+		files.Extra = append(files.Extra, pkg.RepoPath(extra.Path))
+	}
+	return files
+}
+
+func fileExists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
+}
+
+// Apply writes the version updates, changelogs, extra-files, and manifest.
 func Apply(result *AnalysisResult, dryRun bool) error {
 	contracts.RequireNotNil(result, "result")
 
-	if len(result.Releases) == 0 {
+	if len(result.Releases) == 0 || dryRun {
 		return nil
 	}
 
-	// Update manifest with new versions
+	root := result.Config.RepoRoot
 	manifestUpdates := make(map[string]string)
 	for _, rel := range result.Releases {
-		manifestUpdates[rel.Package.Path] = rel.NewVersion
+		manifestUpdates[rel.Package.ManifestKey] = rel.NewVersion
 	}
 
-	// Update VERSION files and CHANGELOGs
 	for _, rel := range result.Releases {
-		if dryRun {
-			continue
+		files := PlannedFiles(root, rel)
+
+		if files.Version != "" {
+			if err := updateVersionFile(filepath.Join(root, filepath.FromSlash(files.Version)), rel.NewVersion); err != nil {
+				return fmt.Errorf("failed to update VERSION for %s: %w", rel.Package.Component, err)
+			}
 		}
 
-		// Update VERSION file
-		versionPath := filepath.Join(result.Config.RepoRoot, rel.Package.Path, "VERSION")
-		if err := updateVersionFile(versionPath, rel.NewVersion); err != nil {
-			return fmt.Errorf("failed to update VERSION for %s: %w", rel.Package.Component, err)
+		for _, extra := range rel.Package.ExtraFiles {
+			if err := extrafile.Update(root, rel.Package, extra, rel.NewVersion); err != nil {
+				return fmt.Errorf("failed to update %s: %w", rel.Package.Component, err)
+			}
 		}
 
-		// Update CHANGELOG
-		changelogPath := filepath.Join(result.Config.RepoRoot, rel.Package.Path, rel.Package.ChangelogPath)
-		compareURL := changelog.BuildCompareURL(result.RepoURL, rel.Package.Component, rel.Package.TagSeparator, rel.OldVersion, rel.NewVersion)
-		if err := updateChangelog(changelogPath, rel, compareURL, result.RepoURL); err != nil {
-			return fmt.Errorf("failed to update CHANGELOG for %s: %w", rel.Package.Component, err)
+		if files.Changelog != "" {
+			compareURL := changelog.BuildCompareURL(result.RepoURL, rel.Package.TagName(rel.OldVersion), rel.Package.TagName(rel.NewVersion))
+			if err := updateChangelog(filepath.Join(root, filepath.FromSlash(files.Changelog)), rel, compareURL, result.RepoURL); err != nil {
+				return fmt.Errorf("failed to update CHANGELOG for %s: %w", rel.Package.Component, err)
+			}
 		}
 	}
 
-	// Update manifest file
-	if !dryRun {
-		if err := updateManifest(result.Config.RepoRoot, manifestUpdates); err != nil {
-			return fmt.Errorf("failed to update manifest: %w", err)
-		}
+	if err := updateManifest(root, manifestUpdates); err != nil {
+		return fmt.Errorf("failed to update manifest: %w", err)
 	}
 
 	return nil
@@ -393,7 +449,7 @@ func updateChangelog(path string, rel *PackageRelease, compareURL, repoURL strin
 
 // updateManifest updates release-please-manifest.json with new versions.
 func updateManifest(repoRoot string, updates map[string]string) error {
-	manifestPath := filepath.Join(repoRoot, "release-please-manifest.json")
+	manifestPath := filepath.Join(repoRoot, config.ManifestFile)
 
 	// Read existing manifest
 	data, err := os.ReadFile(manifestPath)
@@ -405,16 +461,8 @@ func updateManifest(repoRoot string, updates map[string]string) error {
 	// For simplicity, we'll use string manipulation to update values
 	content := string(data)
 
-	for path, version := range updates {
-		// Find and replace the version for this path
-		// Format: "path": "version"
-		oldPattern := fmt.Sprintf(`"%s": "[^"]*"`, path)
-		newValue := fmt.Sprintf(`"%s": "%s"`, path, version)
-
-		// Simple replacement (works for well-formatted JSON)
-		content = replaceJSONValue(content, path, version)
-		_ = oldPattern
-		_ = newValue
+	for key, version := range updates {
+		content = replaceJSONValue(content, key, version)
 	}
 
 	return os.WriteFile(manifestPath, []byte(content), 0644)

@@ -26,12 +26,45 @@ type Config struct {
 
 	// RepoRoot is the absolute path to the repository root.
 	RepoRoot string
+
+	// Scopes are the repo-level commit scopes: the scopes allowed on a commit
+	// that touches no package (e.g. "repo", "docs", "ci", "deps").
+	Scopes []string
+
+	// Types are the allowed conventional commit types. A breaking marker is
+	// allowed only on feat.
+	Types []string
+
+	// SubjectMaxLength is the longest commit description allowed, counted
+	// after the "type(scope): " prefix.
+	SubjectMaxLength int
 }
+
+// ConfigFile and ManifestFile are the release-please file names at the repo root.
+const (
+	ConfigFile   = "release-please-config.json"
+	ManifestFile = "release-please-manifest.json"
+)
+
+// RootManifestKey is the manifest and config key of a root package.
+const RootManifestKey = "."
+
+// DefaultTypes are the commit types allowed when the config sets none.
+var DefaultTypes = []string{"feat", "fix", "chore", "docs"}
+
+// DefaultSubjectMaxLength is the description limit when the config sets none.
+const DefaultSubjectMaxLength = 50
 
 // Package represents a single package's configuration.
 type Package struct {
 	// Path is the relative path from repo root (e.g., "workloads/jarvis").
+	// The root package (keyed "." in the config) has the empty path.
 	Path string
+
+	// ManifestKey is the key this package's version is stored under in the
+	// manifest: the key as the manifest spells it, else the normalized path,
+	// else "." for the root package.
+	ManifestKey string
 
 	// Component is the package name used in releases (e.g., "jarvis").
 	Component string
@@ -55,6 +88,14 @@ type Package struct {
 
 	// LinkedGroup is the name of the linked-versions group, if any.
 	LinkedGroup string
+
+	// OmitComponentFromTag is the inverse of release-please's
+	// include-component-in-tag. When true, TagName is "v" + version.
+	OmitComponentFromTag bool
+
+	// ExtraFiles are further files carrying this package's version, with
+	// paths relative to the package path.
+	ExtraFiles []ExtraFile
 }
 
 // releasePleaseConfig represents the JSON structure of release-please-config.json.
@@ -64,6 +105,11 @@ type releasePleaseConfig struct {
 	// TagSeparator is the repo-wide default, applied to any package that does
 	// not set its own. Absent means the conventional "-".
 	TagSeparator *string `json:"tag-separator"`
+	// IncludeComponentInTag is the repo-wide default; absent means true.
+	IncludeComponentInTag *bool    `json:"include-component-in-tag"`
+	Scopes                []string `json:"scopes"`
+	Types                 []string `json:"types"`
+	SubjectMaxLength      *int     `json:"subject-max-length"`
 }
 
 type packageConfig struct {
@@ -72,7 +118,9 @@ type packageConfig struct {
 	// TagSeparator overrides the string between the component and the version
 	// in this package's tag. Release Please supports it both at the top level
 	// and per package; we honour both, with the per-package value winning.
-	TagSeparator *string `json:"tag-separator"`
+	TagSeparator          *string     `json:"tag-separator"`
+	IncludeComponentInTag *bool       `json:"include-component-in-tag"`
+	ExtraFiles            []ExtraFile `json:"extra-files"`
 }
 
 type pluginConfig struct {
@@ -91,8 +139,8 @@ func Load(repoRoot string) (*Config, error) {
 		return nil, fmt.Errorf("failed to resolve absolute path: %w", err)
 	}
 
-	configPath := filepath.Join(absRoot, "release-please-config.json")
-	manifestPath := filepath.Join(absRoot, "release-please-manifest.json")
+	configPath := filepath.Join(absRoot, ConfigFile)
+	manifestPath := filepath.Join(absRoot, ManifestFile)
 
 	// Read config file
 	configData, err := os.ReadFile(configPath)
@@ -116,11 +164,32 @@ func Load(repoRoot string) (*Config, error) {
 		return nil, fmt.Errorf("failed to parse release-please-manifest.json: %w", err)
 	}
 
+	// Manifest keys may be spelled "./a", "a/" or "."; index them by path.
+	manifestKeys := make(map[string]string, len(manifest))
+	for key := range manifest {
+		manifestKeys[normalizePath(key)] = key
+	}
+
+	types, err := resolveTypes(rpConfig.Types)
+	if err != nil {
+		return nil, err
+	}
+	subjectMax := DefaultSubjectMaxLength
+	if rpConfig.SubjectMaxLength != nil {
+		if *rpConfig.SubjectMaxLength <= 0 {
+			return nil, fmt.Errorf("subject-max-length must be positive, got %d", *rpConfig.SubjectMaxLength)
+		}
+		subjectMax = *rpConfig.SubjectMaxLength
+	}
+
 	// Build config
 	config := &Config{
-		Packages:     make(map[string]*Package),
-		LinkedGroups: make(map[string][]string),
-		RepoRoot:     absRoot,
+		Packages:         make(map[string]*Package),
+		LinkedGroups:     make(map[string][]string),
+		RepoRoot:         absRoot,
+		Scopes:           rpConfig.Scopes,
+		Types:            types,
+		SubjectMaxLength: subjectMax,
 	}
 
 	// Build linked groups lookup (component name -> group name)
@@ -139,13 +208,24 @@ func Load(repoRoot string) (*Config, error) {
 		// Normalize path (remove leading ./ or trailing /)
 		path = normalizePath(path)
 
+		manifestKey, inManifest := manifestKeys[path]
+		if !inManifest {
+			manifestKey = path
+			if path == "" {
+				manifestKey = RootManifestKey
+			}
+		}
+
 		pkg := &Package{
-			Path:           path,
-			Component:      pkgConfig.Component,
-			ChangelogPath:  pkgConfig.ChangelogPath,
-			CurrentVersion: manifest[path],
-			LinkedGroup:    componentToGroup[pkgConfig.Component],
-			TagSeparator:   resolveTagSeparator(rpConfig.TagSeparator, pkgConfig.TagSeparator),
+			Path:                 path,
+			ManifestKey:          manifestKey,
+			Component:            pkgConfig.Component,
+			ChangelogPath:        pkgConfig.ChangelogPath,
+			CurrentVersion:       manifest[manifestKey],
+			LinkedGroup:          componentToGroup[pkgConfig.Component],
+			TagSeparator:         resolveTagSeparator(rpConfig.TagSeparator, pkgConfig.TagSeparator),
+			OmitComponentFromTag: !resolveIncludeComponent(rpConfig.IncludeComponentInTag, pkgConfig.IncludeComponentInTag),
+			ExtraFiles:           pkgConfig.ExtraFiles,
 		}
 
 		// Default changelog path
@@ -156,6 +236,9 @@ func Load(repoRoot string) (*Config, error) {
 		// Validate
 		if pkg.Component == "" {
 			return nil, fmt.Errorf("package %s missing component name", path)
+		}
+		if _, dup := config.Packages[path]; dup {
+			return nil, fmt.Errorf("package path %q is configured twice", path)
 		}
 
 		config.Packages[path] = pkg
@@ -177,14 +260,13 @@ func (c *Config) FindPackageForPath(filePath string) *Package {
 	filePath = normalizePath(filePath)
 
 	var bestMatch *Package
-	var bestMatchLen int
 
 	for path, pkg := range c.Packages {
-		// Check if the file path starts with this package path
-		if strings.HasPrefix(filePath, path+"/") || filePath == path {
-			if len(path) > bestMatchLen {
+		// The root package (empty path) owns every file; any other package
+		// owns the files under its directory.
+		if path == "" || strings.HasPrefix(filePath, path+"/") || filePath == path {
+			if bestMatch == nil || len(path) > len(bestMatch.Path) {
 				bestMatch = pkg
-				bestMatchLen = len(path)
 			}
 		}
 	}
@@ -233,8 +315,12 @@ func (c *Config) PackagesSortedByPath() []*Package {
 	return result
 }
 
-// normalizePath cleans up a path for consistent comparison.
+// normalizePath cleans up a path for consistent comparison. The root path
+// "." becomes the empty path.
 func normalizePath(path string) string {
+	if path == "." || path == "./" {
+		return ""
+	}
 	// Remove leading ./
 	path = strings.TrimPrefix(path, "./")
 	// Remove trailing /
@@ -272,9 +358,64 @@ func resolveTagSeparator(repoWide, perPackage *string) string {
 // to the default rather than silently producing "enginev1.2.3". A config that
 // genuinely wants no separator is an edge case not worth the ambiguity here.
 func (p *Package) TagName(version string) string {
+	if p.OmitComponentFromTag {
+		return "v" + version
+	}
 	sep := p.TagSeparator
 	if sep == "" {
 		sep = DefaultTagSeparator
 	}
 	return p.Component + sep + "v" + version
 }
+
+// resolveIncludeComponent applies release-please's include-component-in-tag:
+// the package value wins, then the repo-wide value, then true.
+func resolveIncludeComponent(repoWide, perPackage *bool) bool {
+	if perPackage != nil {
+		return *perPackage
+	}
+	if repoWide != nil {
+		return *repoWide
+	}
+	return true
+}
+
+// resolveTypes returns the allowed commit types. "feat!" means the same as
+// "feat": the breaking marker is a property of feat, not a separate type.
+func resolveTypes(configured []string) ([]string, error) {
+	if len(configured) == 0 {
+		return append([]string(nil), DefaultTypes...), nil
+	}
+	seen := make(map[string]bool, len(configured))
+	var types []string
+	for _, t := range configured {
+		name := strings.TrimSuffix(t, "!")
+		if name == "" {
+			return nil, fmt.Errorf("types: %q is not a commit type", t)
+		}
+		if !seen[name] {
+			seen[name] = true
+			types = append(types, name)
+		}
+	}
+	return types, nil
+}
+
+// RepoPath returns a path relative to this package as a path relative to the
+// repo root, using forward slashes.
+func (p *Package) RepoPath(rel string) string {
+	rel = strings.TrimPrefix(filepath.ToSlash(rel), "/")
+	if p.Path == "" {
+		return rel
+	}
+	return p.Path + "/" + rel
+}
+
+// VersionFile returns the repo-relative path of this package's VERSION file.
+func (p *Package) VersionFile() string { return p.RepoPath("VERSION") }
+
+// ChangelogFile returns the repo-relative path of this package's changelog.
+func (p *Package) ChangelogFile() string { return p.RepoPath(p.ChangelogPath) }
+
+// IsRoot reports whether this is the root package (config key ".").
+func (p *Package) IsRoot() bool { return p.Path == "" }

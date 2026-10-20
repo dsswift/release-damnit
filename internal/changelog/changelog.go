@@ -124,28 +124,13 @@ func Prepend(existingChangelog, newEntry string) string {
 	return result
 }
 
-// BuildCompareURL creates a GitHub compare URL between two versions.
-//
-// separator is the component/version separator from the package's config
-// (config.Package.TagSeparator). An empty value falls back to the conventional
-// "-", so callers that predate per-package separators keep working.
-func BuildCompareURL(repoURL, component, separator, prevVersion, newVersion string) string {
-	if repoURL == "" || prevVersion == "" {
+// BuildCompareURL creates a compare URL between two tags. Callers pass the
+// tags from config.Package.TagName so links always match the real tags.
+func BuildCompareURL(repoURL, prevTag, newTag string) string {
+	if repoURL == "" || prevTag == "" {
 		return ""
 	}
-
-	// Ensure repoURL doesn't end with /
-	repoURL = strings.TrimSuffix(repoURL, "/")
-
-	if separator == "" {
-		separator = "-"
-	}
-
-	// Tag format: component + separator + vX.Y.Z
-	prevTag := fmt.Sprintf("%s%sv%s", component, separator, prevVersion)
-	newTag := fmt.Sprintf("%s%sv%s", component, separator, newVersion)
-
-	return fmt.Sprintf("%s/compare/%s...%s", repoURL, prevTag, newTag)
+	return fmt.Sprintf("%s/compare/%s...%s", strings.TrimSuffix(repoURL, "/"), prevTag, newTag)
 }
 
 // filterCommitsByType returns commits matching the given type.

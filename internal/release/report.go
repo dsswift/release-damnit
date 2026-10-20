@@ -56,6 +56,11 @@ type ComponentRelease struct {
 
 	// Commits contains the commits that triggered this release.
 	Commits []CommitInfo `json:"commits"`
+
+	// Files are the repo-relative files the release writes for this
+	// package: VERSION (when written), changelog, and extra-files. The
+	// manifest is shared and not listed.
+	Files []string `json:"files"`
 }
 
 // CommitInfo contains commit details for the release report.
@@ -183,6 +188,10 @@ func BuildReleaseReport(result *AnalysisResult, repoURL string) *ReleaseReport {
 			TagName:    rel.Package.TagName(rel.NewVersion),
 			LinkedBump: len(rel.Commits) == 0 && rel.Package.LinkedGroup != "",
 			Commits:    make([]CommitInfo, 0, len(rel.Commits)),
+			Files:      []string{},
+		}
+		if result.Config != nil {
+			compRelease.Files = append(compRelease.Files, PlannedFiles(result.Config.RepoRoot, rel).Paths()...)
 		}
 
 		// Build release URL if repo URL is available

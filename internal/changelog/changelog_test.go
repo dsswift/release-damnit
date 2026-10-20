@@ -159,74 +159,23 @@ All notable changes to this project will be documented in this file.
 
 func TestBuildCompareURL(t *testing.T) {
 	tests := []struct {
-		name        string
-		repoURL     string
-		component   string
-		separator   string
-		prevVersion string
-		newVersion  string
-		want        string
+		name    string
+		repoURL string
+		prevTag string
+		newTag  string
+		want    string
 	}{
-		{
-			name:        "basic",
-			repoURL:     "https://github.com/owner/repo",
-			component:   "jarvis",
-			prevVersion: "1.0.0",
-			newVersion:  "1.1.0",
-			want:        "https://github.com/owner/repo/compare/jarvis-v1.0.0...jarvis-v1.1.0",
-		},
-		{
-			name:        "trailing slash",
-			repoURL:     "https://github.com/owner/repo/",
-			component:   "api",
-			prevVersion: "0.1.0",
-			newVersion:  "0.2.0",
-			want:        "https://github.com/owner/repo/compare/api-v0.1.0...api-v0.2.0",
-		},
-		{
-			name:        "no repo url",
-			repoURL:     "",
-			component:   "api",
-			prevVersion: "0.1.0",
-			newVersion:  "0.2.0",
-			want:        "",
-		},
-		{
-			name:        "no prev version",
-			repoURL:     "https://github.com/owner/repo",
-			component:   "api",
-			prevVersion: "",
-			newVersion:  "1.0.0",
-			want:        "",
-		},
-		{
-			// A nested Go module. The module proxy resolves
-			// .../sdk/go@v1.1.0 only against a tag named exactly
-			// "sdk/go/v1.1.0", so the compare link has to use the same
-			// separator the tag does.
-			name:        "slash separator for a nested go module",
-			repoURL:     "https://github.com/owner/repo",
-			component:   "sdk/go",
-			separator:   "/",
-			prevVersion: "1.0.0",
-			newVersion:  "1.1.0",
-			want:        "https://github.com/owner/repo/compare/sdk/go/v1.0.0...sdk/go/v1.1.0",
-		},
-		{
-			name:        "empty separator falls back to the default",
-			repoURL:     "https://github.com/owner/repo",
-			component:   "engine",
-			separator:   "",
-			prevVersion: "1.0.0",
-			newVersion:  "1.1.0",
-			want:        "https://github.com/owner/repo/compare/engine-v1.0.0...engine-v1.1.0",
-		},
+		{"component tags", "https://github.com/owner/repo", "jarvis-v1.0.0", "jarvis-v1.1.0", "https://github.com/owner/repo/compare/jarvis-v1.0.0...jarvis-v1.1.0"},
+		{"trailing slash", "https://github.com/owner/repo/", "api-v0.1.0", "api-v0.2.0", "https://github.com/owner/repo/compare/api-v0.1.0...api-v0.2.0"},
+		{"bare version tags", "https://github.com/owner/repo", "v1.3.0", "v1.4.0", "https://github.com/owner/repo/compare/v1.3.0...v1.4.0"},
+		{"slash separator for a nested go module", "https://github.com/owner/repo", "sdk/go/v1.0.0", "sdk/go/v1.1.0", "https://github.com/owner/repo/compare/sdk/go/v1.0.0...sdk/go/v1.1.0"},
+		{"no repo url", "", "api-v0.1.0", "api-v0.2.0", ""},
+		{"no previous tag", "https://github.com/owner/repo", "", "api-v1.0.0", ""},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got := BuildCompareURL(tc.repoURL, tc.component, tc.separator, tc.prevVersion, tc.newVersion)
-			if got != tc.want {
+			if got := BuildCompareURL(tc.repoURL, tc.prevTag, tc.newTag); got != tc.want {
 				t.Errorf("BuildCompareURL() = %s, want %s", got, tc.want)
 			}
 		})

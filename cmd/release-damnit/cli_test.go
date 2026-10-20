@@ -160,3 +160,31 @@ func TestCLI_Land(t *testing.T) {
 		t.Errorf("exit %d, output %s", code, out)
 	}
 }
+
+// TestCLI_HookBlocksABadCommit installs the hook and commits through git, so
+// the whole path from git to the check runs.
+func TestCLI_HookBlocksABadCommit(t *testing.T) {
+	dir := newRepo(t)
+	if out, code := cli(t, dir, "hooks"); code != 0 || !strings.Contains(out, "installed the commit-msg hook") {
+		t.Fatalf("hooks: exit %d, %s", code, out)
+	}
+	write(t, dir, "x.txt", "x\n")
+	git(t, dir, "add", "-A")
+
+	commit := func(message string) (string, error) {
+		cmd := exec.Command("git", "commit", "-q", "-m", message)
+		cmd.Dir = dir
+		cmd.Env = append(os.Environ(), "PATH="+filepath.Dir(binary)+string(os.PathListSeparator)+os.Getenv("PATH"))
+		out, err := cmd.CombinedOutput()
+		return string(out), err
+	}
+	if out, err := commit("Added x."); err == nil || !strings.Contains(out, "release-damnit check-commit:") {
+		t.Errorf("bad message committed: %v %s", err, out)
+	}
+	if out, err := commit("feat: add x"); err != nil {
+		t.Errorf("good message refused: %v %s", err, out)
+	}
+	if out, code := cli(t, dir, "hooks"); code != 0 || !strings.Contains(out, "already in place") {
+		t.Errorf("second run: exit %d, %s", code, out)
+	}
+}

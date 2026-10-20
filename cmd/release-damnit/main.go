@@ -24,6 +24,7 @@ var commands = map[string]func(args []string) int{
 	"check-commit":  runCheckCommit,
 	"check-commits": runCheckCommits,
 	"land":          runLand,
+	"hooks":         runHooks,
 }
 
 func main() {
@@ -60,6 +61,7 @@ Commands:
   check-commit <msgfile>   Check a commit message against the staged files (commit-msg hook)
   check-commits <range>    Check every non-merge commit in a revision range
   land [branch]            Land main's local commits, or a branch as a --no-ff merge, and push
+  hooks                    Install the commit-msg hook that runs check-commit
 
   Run release-damnit <command> -h for a command's options.
 

@@ -22,7 +22,7 @@ We will use Release Please configuration files unchanged.
 
 | File | How We Use It |
 |------|---------------|
-| `release-please-config.json` | Package paths, components, changelog paths, linked-versions plugin |
+| `release-please-config.json` | Package paths, components, changelog paths, tag naming, extra-files, linked-versions plugin, commit rules |
 | `release-please-manifest.json` | Current versions (we also update this) |
 
 ### Files We Update
@@ -30,7 +30,8 @@ We will use Release Please configuration files unchanged.
 | File | Format |
 |------|--------|
 | `release-please-manifest.json` | JSON with package paths as keys, versions as values |
-| `*/VERSION` | Plain text: `0.1.119 # x-release-please-version` |
+| `*/VERSION` | Plain text: `0.1.119 # x-release-please-version`. Written when it exists or the package has no extra-files. |
+| extra-files | Generic marker lines and JSON string values, changed in place |
 | `*/CHANGELOG.md` | Conventional changelog format (same as RP) |
 
 ### Config Schema Support
@@ -60,9 +61,18 @@ We support the subset of `release-please-config.json` that matters for versionin
 - `packages` - Required. Map of path to package config.
 - `packages.*.component` - Package name for releases.
 - `packages.*.changelog-path` - Where to write changelog (relative to package path).
+- `packages."."` - The root package. It owns every file no deeper package owns; its VERSION and changelog sit at the repo root.
+- `packages.*.extra-files` - More files carrying the version: generic (`x-release-please-version` lines and `x-release-please-start-version` blocks) and json (`jsonpath`).
+- `tag-separator` - Top level or per package. Between component and version in the tag.
+- `include-component-in-tag` - Top level or per package. `false` makes tags bare (`v1.2.3`).
 - `plugins` - Optional. Array of plugins.
 - `plugins.*.type: "linked-versions"` - Link versions across packages.
 - `plugins.*.components` - Which packages are linked.
+
+**release-damnit's own fields** (Release Please ignores them; they drive the commit check):
+- `scopes` - Repo-level commit scopes for commits that touch no package.
+- `types` - Allowed commit types. Default `feat`, `fix`, `chore`, `docs`.
+- `subject-max-length` - Longest commit description. Default 50.
 
 **Ignored fields:**
 - `release-type` - We only support "simple" (VERSION file) style.

@@ -30,7 +30,7 @@ type Commit struct {
 	// Description is the commit message subject (without type/scope prefix).
 	Description string
 
-	// IsBreaking indicates if this is a breaking change (! suffix or BREAKING CHANGE footer).
+	// IsBreaking indicates a breaking change: a ! after the type or scope in the subject.
 	IsBreaking bool
 
 	// Files is the list of files changed by this commit.

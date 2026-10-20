@@ -22,6 +22,10 @@ func TestBuildGitLabRelease(t *testing.T) {
 	if got.TagName != "api-v1.2.3" || got.Title != "api v1.2.3" {
 		t.Fatalf("unexpected release: %#v", got)
 	}
+	nested := BuildGitLabRelease(&PackageRelease{Package: &config.Package{Component: "sdk/go", TagSeparator: "/"}, NewVersion: "1.2.3"}, "https://gitlab.example/group/app")
+	if nested.TagName != "sdk/go/v1.2.3" {
+		t.Fatalf("tag ignores the package tag-separator: %q", nested.TagName)
+	}
 }
 func gitLabResult() *AnalysisResult {
 	return &AnalysisResult{RepoURL: "https://gitlab.example/group/app", MergeInfo: &git.MergeInfo{HeadSHA: "abc123"}, Releases: []*PackageRelease{{Package: &config.Package{Component: "api", Path: "workloads/api"}, NewVersion: "1.2.3"}}}

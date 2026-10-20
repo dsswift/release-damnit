@@ -38,7 +38,7 @@ func DetectProvider(requested, repoURL string) string {
 }
 
 func BuildGitLabRelease(rel *PackageRelease, repoURL string) *GitLabRelease {
-	return &GitLabRelease{TagName: fmt.Sprintf("%s-v%s", rel.Package.Component, rel.NewVersion), Title: fmt.Sprintf("%s v%s", rel.Package.Component, rel.NewVersion), Notes: BuildReleaseNotes(rel, repoURL), PackageInfo: rel}
+	return &GitLabRelease{TagName: rel.Package.TagName(rel.NewVersion), Title: fmt.Sprintf("%s v%s", rel.Package.Component, rel.NewVersion), Notes: BuildReleaseNotes(rel, repoURL), PackageInfo: rel}
 }
 
 func CreateGitLabReleases(result *AnalysisResult, opts *GitLabReleaseOptions) ([]*GitLabRelease, error) {

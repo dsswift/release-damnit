@@ -31,7 +31,8 @@ func runDefault() {
 	flag.Parse()
 
 	if *showVersion {
-		fmt.Printf("release-damnit %s (%s)\n", version, gitSha)
+		v, sha := buildVersion()
+		fmt.Printf("release-damnit %s (%s)\n", v, sha)
 		os.Exit(0)
 	}
 

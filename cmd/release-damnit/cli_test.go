@@ -121,7 +121,8 @@ func TestCLI_CheckCommits(t *testing.T) {
 
 func TestCLI_UnknownFirstArgumentRunsTheDefaultCommand(t *testing.T) {
 	out, code := cli(t, t.TempDir(), "--version")
-	if code != 0 || !strings.HasPrefix(out, "release-damnit dev") {
+	// A test binary carries no ldflags, so the version comes from build info.
+	if code != 0 || !strings.HasPrefix(out, "release-damnit ") || strings.Contains(out, "dev (unknown)") {
 		t.Errorf("--version: exit %d, output %q", code, out)
 	}
 	out, code = cli(t, t.TempDir(), "--help")

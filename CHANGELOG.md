@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [1.4.2](https://github.com/dsswift/release-damnit/compare/v1.4.1...v1.4.2) (2026-10-20)
+
+### Bug Fixes
+
+* release from the branch tip, not the push ([8397224](https://github.com/dsswift/release-damnit/commit/8397224f3357f1d038fd4ba8d2e1be94ed7722a2))
+
 ## [1.4.1](https://github.com/dsswift/release-damnit/compare/v1.4.0...v1.4.1) (2026-10-20)
 
 ### Bug Fixes

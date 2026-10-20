@@ -79,5 +79,13 @@ func WebURL(dir, remote string) string {
 		}
 	}
 
+	// An https remote may carry credentials (a CI token); never let them
+	// reach a link.
+	if scheme, rest, ok := strings.Cut(url, "://"); ok {
+		if at := strings.LastIndex(rest, "@"); at >= 0 && at < strings.IndexAny(rest+"/", "/") {
+			url = scheme + "://" + rest[at+1:]
+		}
+	}
+
 	return strings.TrimSuffix(url, ".git")
 }

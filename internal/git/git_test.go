@@ -373,3 +373,27 @@ func TestIsValidSHA(t *testing.T) {
 		})
 	}
 }
+
+func TestWebURL(t *testing.T) {
+	tests := []struct{ remote, want string }{
+		{"git@github.com:org/repo.git", "https://github.com/org/repo"},
+		{"git@gitlab.example.org:group/app.git", "https://gitlab.example.org/group/app"},
+		{"https://github.com/org/repo.git", "https://github.com/org/repo"},
+		// A CI job's token in the remote must never reach a link.
+		{"https://release-damnit:glpat-secret@gitlab.example.org/group/app.git", "https://gitlab.example.org/group/app"},
+		{"https://gitlab-ci-token:secret@gitlab.example.org:8443/group/app.git", "https://gitlab.example.org:8443/group/app"},
+		{"https://gitlab.example.org/group/a@b.git", "https://gitlab.example.org/group/a@b"},
+	}
+	for _, tt := range tests {
+		dir := t.TempDir()
+		if out, err := exec.Command("git", "-C", dir, "init", "-q").CombinedOutput(); err != nil {
+			t.Fatalf("git init: %v\n%s", err, out)
+		}
+		if out, err := exec.Command("git", "-C", dir, "remote", "add", "origin", tt.remote).CombinedOutput(); err != nil {
+			t.Fatalf("git remote add: %v\n%s", err, out)
+		}
+		if got := WebURL(dir, "origin"); got != tt.want {
+			t.Errorf("WebURL(%q) = %q, want %q", tt.remote, got, tt.want)
+		}
+	}
+}

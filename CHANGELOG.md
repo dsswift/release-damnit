@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [1.5.0](https://github.com/dsswift/release-damnit/compare/v1.4.2...v1.5.0) (2026-10-20)
+
+### Features
+
+* scaffold and publish gitlab repos ([a2dbd7a](https://github.com/dsswift/release-damnit/commit/a2dbd7ae407d37becb7ee7be0848bd31ca58eda2))
+
+### Bug Fixes
+
+* keep remote credentials out of release links ([b359096](https://github.com/dsswift/release-damnit/commit/b3590966e12a9527b2e53e190f182b1d201989a4))
+* build static binaries so alpine can run them ([ab4f582](https://github.com/dsswift/release-damnit/commit/ab4f582157c2897d164c2b5638fb85ee649ad394))
+
 ## [1.4.2](https://github.com/dsswift/release-damnit/compare/v1.4.1...v1.4.2) (2026-10-20)
 
 ### Bug Fixes

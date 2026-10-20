@@ -129,3 +129,34 @@ func TestCLI_UnknownFirstArgumentRunsTheDefaultCommand(t *testing.T) {
 		t.Errorf("--help: exit %d, output %q", code, out)
 	}
 }
+
+func TestCLI_Land(t *testing.T) {
+	root := t.TempDir()
+	remote := filepath.Join(root, "remote.git")
+	git(t, root, "init", "-q", "--bare", "--initial-branch=main", remote)
+	clone := filepath.Join(root, "clone")
+	git(t, root, "clone", "-q", remote, clone)
+	git(t, clone, "config", "user.email", "user@example.com")
+	git(t, clone, "config", "user.name", "Test")
+	write(t, clone, "a.txt", "a\n")
+	git(t, clone, "add", "-A")
+	git(t, clone, "commit", "-qm", "feat: add a")
+	git(t, clone, "push", "-q", "origin", "main")
+	write(t, clone, "b.txt", "b\n")
+	git(t, clone, "add", "-A")
+	git(t, clone, "commit", "-qm", "fix: add b")
+
+	out, code := cli(t, clone, "land", "--attempts", "2")
+	if code != 0 || !strings.Contains(out, "release-damnit land: attempt 1/2: fetching origin/main") {
+		t.Errorf("exit %d, output:\n%s", code, out)
+	}
+	if git(t, remote, "rev-parse", "main") != git(t, clone, "rev-parse", "HEAD") {
+		t.Error("not landed")
+	}
+	if _, code := cli(t, clone, "land", "-h"); code != 0 {
+		t.Errorf("-h exit %d", code)
+	}
+	if out, code := cli(t, clone, "land", "main"); code != 1 || !strings.Contains(out, "release-damnit land: main cannot be landed on itself") {
+		t.Errorf("exit %d, output %s", code, out)
+	}
+}

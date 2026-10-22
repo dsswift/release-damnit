@@ -1,6 +1,7 @@
 // release-damnit is a drop-in replacement for Release Please that correctly
 // traverses merge commits, plus the commit tooling around it: a commit-msg
-// check, a landing command, hook installation, publishing, and scaffolding.
+// check, a commit planner, a landing command, hook installation, publishing,
+// and scaffolding.
 //
 // The first argument picks a command. Anything that is not a command name
 // runs the original flag-based release command, unchanged.
@@ -23,6 +24,7 @@ var (
 var commands = map[string]func(args []string) int{
 	"check-commit":  runCheckCommit,
 	"check-commits": runCheckCommits,
+	"commit":        runCommit,
 	"land":          runLand,
 	"hooks":         runHooks,
 	"publish":       runPublish,
@@ -62,6 +64,7 @@ Usage:
 Commands:
   check-commit <msgfile>   Check a commit message against the staged files (commit-msg hook)
   check-commits <range>    Check every non-merge commit in a revision range
+  commit                   Commit pending changes, grouped and worded by Claude to pass the rules
   land [branch]            Land main's local commits, or a branch as a --no-ff merge, and push
   hooks                    Install the commit-msg hook that runs check-commit
   publish                  Commit the version files, tag that commit, push, create releases

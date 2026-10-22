@@ -227,3 +227,20 @@ func TestCLI_Init(t *testing.T) {
 		t.Errorf("bad extra file: exit %d\n%s", code, out)
 	}
 }
+
+func TestCLI_Commit(t *testing.T) {
+	dir := newRepo(t)
+	write(t, dir, "a.txt", "a\n")
+	gitRun(t, dir, "add", "-A")
+	gitRun(t, dir, "commit", "-qm", "feat: add a")
+
+	if out, code := cli(t, dir, "commit", "--yes"); code != 0 || !strings.Contains(out, "release-damnit commit: nothing to commit") {
+		t.Errorf("exit %d, output:\n%s", code, out)
+	}
+	if out, code := cli(t, dir, "commit", "-h"); code != 0 || !strings.Contains(out, "-staged") {
+		t.Errorf("-h exit %d, output:\n%s", code, out)
+	}
+	if _, code := cli(t, dir, "commit", "extra"); code != 2 {
+		t.Errorf("an argument must exit 2, got %d", code)
+	}
+}

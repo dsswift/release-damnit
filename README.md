@@ -12,7 +12,7 @@ release-damnit uses your existing Release Please configuration but reads git his
 
 Every repo, monorepo or single, works the same way:
 
-1. Work on `main`. Each commit touches one package, and its scope is that package. The commit-msg hook (`release-damnit hooks`) checks this on every commit.
+1. Work on `main`. Each commit touches one package, and its scope is that package. The commit-msg hook (`release-damnit hooks`) checks this on every commit. `release-damnit commit` can split and word the commits for you.
 2. `release-damnit land` puts the commits on the remote main. It rebases onto whatever landed meanwhile, checks the commits again, and pushes.
 3. On the push, CI runs the action with `publish: 'true'`. It bumps the versions, commits them, tags that commit, pushes, and creates the releases.
 
@@ -75,6 +75,7 @@ With no command, release-damnit runs the release analysis above. Its flags and o
 |---------|--------------|
 | `check-commit <msgfile>` | Checks a commit message against the staged files. This is the commit-msg hook. |
 | `check-commits <range>` | Checks every non-merge commit in a revision range, e.g. `origin/main..HEAD`. |
+| `commit` | Commits the pending changes. Claude groups the files and writes messages that pass the commit rules. |
 | `land [branch]` | Lands main's local commits, or a branch as one `--no-ff` merge, and pushes. |
 | `hooks` | Installs the commit-msg hook. |
 | `publish` | Commits the version files, tags that commit, pushes, and creates the releases. |
@@ -133,6 +134,23 @@ release-damnit hooks
 ```
 
 In a repo with a `.husky/` directory, this makes `.husky/commit-msg` run `release-damnit check-commit "$1"` and removes any commitlint line. Other lines stay. Anywhere else, it writes a `commit-msg` git hook (linked worktrees included). That hook tells you how to install release-damnit when the binary is missing. Running it again changes nothing. It refuses to replace a commit-msg hook it did not write; `--force` replaces it.
+
+## Committing
+
+```bash
+release-damnit commit             # plan, confirm, commit
+release-damnit commit --dry-run   # show the plan only
+release-damnit commit --staged    # plan only what is staged
+release-damnit commit --yes       # commit without asking
+```
+
+`commit` takes every modified, deleted, renamed and untracked (not ignored) file, or only the staged ones with `--staged`. It splits them by package with the same config the commit check reads, then asks Claude to group each package's files into commits and write the messages. The reply is checked before anything is committed: every file is in exactly one commit, each commit touches one package, and each message passes the [commit rules](#commit-rules). A plan that fails is sent back once with the problems; a second failure stops with nothing committed.
+
+It shows the plan and asks before committing. Each commit is a plain `git commit`, so the hooks run. Only the plan's files go in each commit; anything else you have staged stays staged. If a commit fails, it stops and lists the commits it made. It never pushes; `land` does that.
+
+Files that may hold secrets are skipped and listed, and never read or sent: `appsettings.json`, `local.settings.json`, `docker-compose.yml`, `.env`, `.env.*`, `credentials.json`. Commit their non-secret parts by hand.
+
+It runs the `claude` CLI (Claude Code) in print mode with structured output. `--model` picks the model (default `haiku`). There is no other configuration.
 
 ## Landing
 

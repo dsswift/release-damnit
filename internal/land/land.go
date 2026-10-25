@@ -3,7 +3,9 @@
 //
 // On main, the local commits are rebased onto the remote main and pushed. A
 // branch lands as one --no-ff merge built in a temporary worktree, so the
-// user's own working trees are never checked out or reset.
+// user's own working trees are never checked out or reset. A main checkout
+// with uncommitted changes, often another person's work in progress, lands
+// its commits the branch way, so those changes are never touched.
 package land
 
 import (
@@ -78,14 +80,10 @@ func Run(opts Options) error {
 	}
 	l := &lander{Options: opts, root: root, remote: "refs/remotes/" + opts.Remote + "/" + opts.Main}
 
-	// Tracked edits would not ride along, and they usually mean work the
-	// user thinks is landing. Untracked files are fine.
-	if dirty, err := isDirty(root); err != nil {
+	dirty, err := isDirty(root)
+	if err != nil {
 		return err
-	} else if dirty {
-		return errors.New("the working tree has uncommitted changes to tracked files; commit or stash them first")
 	}
-
 	current, _ := git.Output(root, "symbolic-ref", "--quiet", "--short", "HEAD")
 	branch := opts.Branch
 	if branch == "" {
@@ -93,10 +91,21 @@ func Run(opts Options) error {
 		case "":
 			return errors.New("HEAD is detached; check out a branch or name the branch to land")
 		case opts.Main:
+			if dirty {
+				// Moving main under uncommitted changes leaves the files behind
+				// it, where they read as edits that undo the newer commits.
+				l.logf("on %s with uncommitted changes, which stay as they are: landing its local commits as a merge built aside", opts.Main)
+				return l.landBranch(opts.Main)
+			}
 			l.logf("on %s: landing its local commits", opts.Main)
 			return l.landMain()
 		}
 		branch = current
+	}
+	// Tracked edits on the branch being landed would not ride along, and they
+	// usually mean work the user thinks is landing. Untracked files are fine.
+	if dirty && branch == current {
+		return errors.New("the working tree has uncommitted changes to tracked files; commit or stash them first")
 	}
 	if branch == opts.Main {
 		return fmt.Errorf("%s cannot be landed on itself; run land with no branch while on %s to push its local commits", opts.Main, opts.Main)
@@ -253,6 +262,9 @@ func (l *lander) landBranch(branch string) error {
 // checkLocalMain refuses when local main holds work that is neither on the
 // remote nor a copy of a commit on branch: moving main would drop it.
 func (l *lander) checkLocalMain(branch, base string) error {
+	if branch == l.Main {
+		return nil
+	}
 	localMain, err := l.git("rev-parse", "--verify", "--quiet", "refs/heads/"+l.Main)
 	if err != nil {
 		l.logf("no local %s; nothing to protect", l.Main)

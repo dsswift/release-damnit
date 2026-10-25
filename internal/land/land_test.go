@@ -193,8 +193,9 @@ func TestLand_PushRefusedWithoutARace(t *testing.T) {
 	}
 }
 
-func TestLand_RefusesADirtyTrackedTree(t *testing.T) {
+func TestLand_RefusesADirtyTreeOnTheBranchItLands(t *testing.T) {
 	w := newWorld(t)
+	run(t, w.a, "checkout", "-q", "-b", "feature")
 	commit(t, w.a, "a.txt", "a\n", "feat: mine")
 	write(t, w.a, "a.txt", "edited\n")
 	if _, err := land(t, w.a, Options{}); err == nil || !strings.Contains(err.Error(), "uncommitted changes") {
@@ -206,6 +207,67 @@ func TestLand_RefusesADirtyTrackedTree(t *testing.T) {
 	write(t, w.a, "scratch.txt", "untracked\n")
 	if out, err := land(t, w.a, Options{}); err != nil {
 		t.Errorf("untracked file blocked the landing: %v\n%s", err, out)
+	}
+}
+
+func TestLand_OnADirtyMainLandsAsAMergeAndTouchesNothing(t *testing.T) {
+	w := newWorld(t)
+	other := commit(t, w.b, "b.txt", "b\n", "feat: from b")
+	run(t, w.b, "push", "-q", "origin", "main")
+	mine := commit(t, w.a, "a.txt", "a\n", "feat: from a")
+	// Someone else's work in progress, in the same checkout.
+	write(t, w.a, "README.md", "half done\n")
+	tempDir := t.TempDir()
+
+	out, err := land(t, w.a, Options{TempDir: tempDir})
+	if err != nil {
+		t.Fatalf("land: %v\n%s", err, out)
+	}
+	merged := w.remoteMain(t)
+	if parents := run(t, w.a, "log", "-1", "--format=%P", merged); parents != other+" "+mine {
+		t.Errorf("remote main's parents = %s, want b's commit then a's", parents)
+	}
+	if head := run(t, w.a, "rev-parse", "main"); head != mine {
+		t.Errorf("local main moved to %s; it must stay at %s under uncommitted changes", head, mine)
+	}
+	if got, _ := os.ReadFile(filepath.Join(w.a, "README.md")); string(got) != "half done\n" {
+		t.Errorf("README.md = %q; the uncommitted change was touched", got)
+	}
+	if _, err := os.Stat(filepath.Join(w.a, "b.txt")); err == nil {
+		t.Error("b.txt appeared: the checkout's files moved")
+	}
+	if status := run(t, w.a, "status", "--porcelain", "--untracked-files=no"); status != "M README.md" {
+		t.Errorf("status = %q, want only the uncommitted change", status)
+	}
+	if !strings.Contains(out, "stay as they are") || !strings.Contains(out, "note: main is checked out at") {
+		t.Errorf("output does not explain itself:\n%s", out)
+	}
+	assertNoTempWorktrees(t, w.a, tempDir, 1)
+
+	// The next landing from the same checkout finds nothing left to land.
+	out, err = land(t, w.a, Options{TempDir: tempDir})
+	if err != nil || !strings.Contains(out, "nothing to land") {
+		t.Errorf("second land: %v\n%s", err, out)
+	}
+}
+
+func TestLand_ABranchLandsFromADirtyMainCheckout(t *testing.T) {
+	w := newWorld(t)
+	feature := filepath.Join(t.TempDir(), "feature")
+	run(t, w.a, "worktree", "add", "-q", "-b", "feature", feature, "main")
+	configure(t, feature)
+	commit(t, feature, "f.txt", "1\n", "feat: one")
+	write(t, w.a, "README.md", "half done\n")
+
+	out, err := land(t, w.a, Options{Branch: "feature"})
+	if err != nil {
+		t.Fatalf("land: %v\n%s", err, out)
+	}
+	if got, _ := os.ReadFile(filepath.Join(w.a, "README.md")); string(got) != "half done\n" {
+		t.Errorf("README.md = %q; the uncommitted change was touched", got)
+	}
+	if run(t, w.a, "rev-parse", "main") == w.remoteMain(t) {
+		t.Error("local main moved under uncommitted changes")
 	}
 }
 

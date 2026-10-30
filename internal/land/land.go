@@ -267,7 +267,9 @@ func (l *lander) landBranch(branch string) error {
 }
 
 // checkLocalMain refuses when local main holds work that is neither on the
-// remote nor a copy of a commit on branch: moving main would drop it.
+// remote nor a copy of a commit on branch: moving main would drop it. A main
+// checked out in a worktree only ever fast-forwards, which cannot drop it, so
+// that main is left for its own landing instead.
 func (l *lander) checkLocalMain(branch, base string) error {
 	if branch == l.Main {
 		return nil
@@ -275,6 +277,9 @@ func (l *lander) checkLocalMain(branch, base string) error {
 	localMain, err := l.git("rev-parse", "--verify", "--quiet", "refs/heads/"+l.Main)
 	if err != nil {
 		l.logf("no local %s; nothing to protect", l.Main)
+		return nil
+	}
+	if _, checkedOut, err := l.worktreeOf("refs/heads/" + l.Main); err == nil && checkedOut {
 		return nil
 	}
 	stray, err := l.git("rev-list", "--cherry-pick", "--right-only", "--no-merges", branch+"..."+localMain, "^"+base)
@@ -364,6 +369,11 @@ func (l *lander) updateLocalMain(landed string) {
 	head, err := git.Output(path, "rev-parse", "HEAD")
 	if err != nil {
 		l.logf("note: could not read %s at %s, so it was left as it is: %v", l.Main, path, err)
+		return
+	}
+	if !l.isAncestor(head, landed) {
+		n, _ := l.count(landed + ".." + head)
+		l.logf("note: left %s at %s as it is: it has %d commit(s) that are not on %s/%s; land them", l.Main, path, n, l.Remote, l.Main)
 		return
 	}
 	if err := l.fastForward(path, head, landed); err != nil {

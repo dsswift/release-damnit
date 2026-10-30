@@ -410,6 +410,30 @@ func TestLand_BranchRefusesStrayLocalMainCommits(t *testing.T) {
 	}
 }
 
+func TestLand_BranchLandsBesideCommitsOnACheckedOutMain(t *testing.T) {
+	w := newWorld(t)
+	feature := filepath.Join(t.TempDir(), "feature")
+	run(t, w.a, "worktree", "add", "-q", "-b", "feature", feature, "main")
+	configure(t, feature)
+	commit(t, feature, "f.txt", "1\n", "feat: one")
+	// Someone else's commit on the checked-out main, not landed yet.
+	theirs := commit(t, w.a, "stray.txt", "x\n", "feat: stray on main")
+
+	out, err := land(t, w.a, Options{Branch: "feature"})
+	if err != nil {
+		t.Fatalf("land: %v\n%s", err, out)
+	}
+	if head := run(t, w.a, "rev-parse", "main"); head != theirs {
+		t.Errorf("local main = %s, want it left at %s", head, theirs)
+	}
+	if !strings.Contains(out, "1 commit(s) that are not on origin/main; land them") {
+		t.Errorf("no note:\n%s", out)
+	}
+	if out, err := land(t, w.a, Options{}); err != nil {
+		t.Errorf("the stray commit did not land after: %v\n%s", err, out)
+	}
+}
+
 func TestLand_BranchAcceptsCopiesOfItsCommitsOnLocalMain(t *testing.T) {
 	w := newWorld(t)
 	run(t, w.a, "checkout", "-q", "-b", "feature")

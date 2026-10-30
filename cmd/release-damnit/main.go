@@ -26,6 +26,7 @@ var commands = map[string]func(args []string) int{
 	"check-commits": runCheckCommits,
 	"commit":        runCommit,
 	"land":          runLand,
+	"sync":          runSync,
 	"hooks":         runHooks,
 	"publish":       runPublish,
 	"init":          runInit,
@@ -66,6 +67,7 @@ Commands:
   check-commits <range>    Check every non-merge commit in a revision range
   commit                   Commit pending changes, grouped and worded by Claude to pass the rules
   land [branch]            Land main's local commits, or a branch as a --no-ff merge, and push
+  sync [dir...]            Fast-forward local main to the remote, carrying uncommitted changes
   hooks                    Install the commit-msg hook that runs check-commit
   publish                  Commit the version files, tag that commit, push, create releases
   init                     Scaffold release config, workflow and hook for a single repo (GitHub)

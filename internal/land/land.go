@@ -5,7 +5,8 @@
 // branch lands as one --no-ff merge built in a temporary worktree, so the
 // user's own working trees are never checked out or reset. A main checkout
 // with uncommitted changes, often another person's work in progress, lands
-// its commits the branch way, so those changes are never touched.
+// its commits the branch way and then fast-forwards, carrying those changes
+// forward without losing them (sync.go).
 package land
 
 import (
@@ -52,6 +53,7 @@ var ErrCommitRules = errors.New("fix the commits above, then land again")
 
 type lander struct {
 	Options
+	prefix string // starts every line; Prefix when empty
 	root   string
 	remote string // refs/remotes/<remote>/<main>
 }
@@ -92,9 +94,10 @@ func Run(opts Options) error {
 			return errors.New("HEAD is detached; check out a branch or name the branch to land")
 		case opts.Main:
 			if dirty {
-				// Moving main under uncommitted changes leaves the files behind
-				// it, where they read as edits that undo the newer commits.
-				l.logf("on %s with uncommitted changes, which stay as they are: landing its local commits as a merge built aside", opts.Main)
+				// A rebase in place would stop on those changes. The merge is
+				// built aside, and main then fast-forwards to it with the
+				// changes carried along.
+				l.logf("on %s with uncommitted changes: landing its local commits as a merge built aside", opts.Main)
 				return l.landBranch(opts.Main)
 			}
 			l.logf("on %s: landing its local commits", opts.Main)
@@ -118,7 +121,11 @@ func Run(opts Options) error {
 }
 
 func (l *lander) logf(format string, args ...any) {
-	fmt.Fprintf(l.Out, Prefix+format+"\n", args...)
+	prefix := l.prefix
+	if prefix == "" {
+		prefix = Prefix
+	}
+	fmt.Fprintf(l.Out, prefix+format+"\n", args...)
 }
 
 func (l *lander) git(args ...string) (string, error) { return git.Output(l.root, args...) }
@@ -334,9 +341,10 @@ func (l *lander) removeWorktree(dir string) {
 	_, _ = l.git("worktree", "prune")
 }
 
-// updateLocalMain moves local main to the landed commit without touching any
-// work: a ref update when main is not checked out, a fast-forward in the
-// worktree that has it when that worktree is clean, and a note otherwise.
+// updateLocalMain moves local main to the landed commit without losing any
+// work: a ref update when main is not checked out, and otherwise a
+// fast-forward in the worktree that has it, carrying its uncommitted changes
+// forward (fastForward). When those changes would conflict, it leaves a note.
 func (l *lander) updateLocalMain(landed string) {
 	path, checkedOut, err := l.worktreeOf("refs/heads/" + l.Main)
 	if err != nil {
@@ -353,13 +361,13 @@ func (l *lander) updateLocalMain(landed string) {
 		return
 	}
 
-	if dirty, err := isDirty(path); err != nil || dirty {
-		l.logf("note: %s is checked out at %s with uncommitted changes; left it as it is. Later: git -C %s merge --ff-only %s",
-			l.Main, path, path, short(landed))
+	head, err := git.Output(path, "rev-parse", "HEAD")
+	if err != nil {
+		l.logf("note: could not read %s at %s, so it was left as it is: %v", l.Main, path, err)
 		return
 	}
-	if _, err := git.Output(path, "merge", "--quiet", "--ff-only", landed); err != nil {
-		l.logf("note: could not fast-forward %s at %s to %s: %v", l.Main, path, short(landed), err)
+	if err := l.fastForward(path, head, landed); err != nil {
+		l.logf("note: left %s at %s as it is: %v. Later: release-damnit sync", l.Main, path, err)
 		return
 	}
 	l.logf("fast-forwarded %s at %s to %s", l.Main, path, short(landed))

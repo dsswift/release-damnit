@@ -77,6 +77,7 @@ With no command, release-damnit runs the release analysis above. Its flags and o
 | `check-commits <range>` | Checks every non-merge commit in a revision range, e.g. `origin/main..HEAD`. |
 | `commit` | Commits the pending changes. Claude groups the files and writes messages that pass the commit rules. |
 | `land [branch]` | Lands main's local commits, or a branch as one `--no-ff` merge, and pushes. |
+| `sync [dir...]` | Fast-forwards local main to the remote main, carrying uncommitted changes forward. |
 | `hooks` | Installs the commit-msg hook. |
 | `publish` | Commits the version files, tags that commit, pushes, and creates the releases. |
 | `init` | Scaffolds a single GitHub repo: config, manifest, workflow, hook. |
@@ -161,9 +162,26 @@ release-damnit land feature-x  # land a branch as one --no-ff merge
 
 Options: `--remote` (default `origin`), `--main` (default `main`), `--attempts` (default 5).
 
-On main, land fetches, rebases the local commits onto the remote main, runs the commit rules on them, and pushes. On a branch, it builds the `--no-ff` merge in a temporary worktree, so none of your working trees is checked out or reset. Then it pushes and moves local main to the merge: a ref update when main is not checked out, a fast-forward where it is checked out and clean, and a note when that worktree has changes.
+On main, land fetches, rebases the local commits onto the remote main, runs the commit rules on them, and pushes. On a branch, it builds the `--no-ff` merge in a temporary worktree, so none of your working trees is checked out or reset. Then it pushes and moves local main to the merge, the way `sync` does.
 
-When the push is rejected because main moved on the remote (a CI version commit, someone else's landing), land starts over on the new main. When the push is refused and main did not move, land stops and points you at the hook or server output. Land never force pushes and never skips hooks. When main is checked out with uncommitted changes to tracked files, often someone else's work in progress in a shared checkout, land does not rebase main in place. It lands main's commits as one `--no-ff` merge built in a temporary worktree and leaves main and every file where they are, with a note. Moving main under those changes would leave the files behind it, where they read as edits that undo the newer commits. Land refuses uncommitted changes only on the branch it is landing, and on a branch it refuses a local main holding commits that are neither on the remote nor copies of the branch's commits.
+When the push is rejected because main moved on the remote (a CI version commit, someone else's landing), land starts over on the new main. When the push is refused and main did not move, land stops and points you at the hook or server output. Land never force pushes and never skips hooks. When main is checked out with uncommitted changes to tracked files, often someone else's work in progress in a shared checkout, land does not rebase main in place. It lands main's commits as one `--no-ff` merge built in a temporary worktree, then fast-forwards main to it, carrying those changes forward. Land refuses uncommitted changes only on the branch it is landing, and on a branch it refuses a local main holding commits that are neither on the remote nor copies of the branch's commits.
+
+## Syncing
+
+```bash
+release-damnit sync                      # this repository
+release-damnit sync ~/src/a ~/src/b      # several
+```
+
+Options: `--remote` (default `origin`), `--main` (default: the remote's `HEAD`, or `main`).
+
+Sync fetches the remote main and moves local main up to it: a ref update when main is not checked out, and a fast-forward where it is. Uncommitted changes in that checkout come along:
+
+- A change to a file the incoming commits leave alone stays as it is, staged or not.
+- A file both sides changed is merged three ways. Its base is the version the copy started from: the newest incoming version whose change the copy already holds, or the old main's. So a copy of a file that has since landed is no change at all afterwards, and an edit on top of it stays an edit.
+- When any such file would conflict or is staged, or a git operation is under way, nothing moves, and sync names the files.
+
+Local main with commits the remote lacks is left for `land`. Sync never commits, stashes, or resets.
 
 ## Publishing
 

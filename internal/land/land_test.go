@@ -210,7 +210,7 @@ func TestLand_RefusesADirtyTreeOnTheBranchItLands(t *testing.T) {
 	}
 }
 
-func TestLand_OnADirtyMainLandsAsAMergeAndTouchesNothing(t *testing.T) {
+func TestLand_OnADirtyMainLandsAsAMergeAndCarriesTheChanges(t *testing.T) {
 	w := newWorld(t)
 	other := commit(t, w.b, "b.txt", "b\n", "feat: from b")
 	run(t, w.b, "push", "-q", "origin", "main")
@@ -227,27 +227,48 @@ func TestLand_OnADirtyMainLandsAsAMergeAndTouchesNothing(t *testing.T) {
 	if parents := run(t, w.a, "log", "-1", "--format=%P", merged); parents != other+" "+mine {
 		t.Errorf("remote main's parents = %s, want b's commit then a's", parents)
 	}
-	if head := run(t, w.a, "rev-parse", "main"); head != mine {
-		t.Errorf("local main moved to %s; it must stay at %s under uncommitted changes", head, mine)
+	if head := run(t, w.a, "rev-parse", "main"); head != merged {
+		t.Errorf("local main = %s, want the landed merge %s", head, merged)
 	}
 	if got, _ := os.ReadFile(filepath.Join(w.a, "README.md")); string(got) != "half done\n" {
-		t.Errorf("README.md = %q; the uncommitted change was touched", got)
+		t.Errorf("README.md = %q; the uncommitted change was lost", got)
 	}
-	if _, err := os.Stat(filepath.Join(w.a, "b.txt")); err == nil {
-		t.Error("b.txt appeared: the checkout's files moved")
+	if _, err := os.Stat(filepath.Join(w.a, "b.txt")); err != nil {
+		t.Error("b.txt is missing: the checkout's files did not move with main")
 	}
 	if status := run(t, w.a, "status", "--porcelain", "--untracked-files=no"); status != "M README.md" {
 		t.Errorf("status = %q, want only the uncommitted change", status)
 	}
-	if !strings.Contains(out, "stay as they are") || !strings.Contains(out, "note: main is checked out at") {
+	if !strings.Contains(out, "fast-forwarded main") {
 		t.Errorf("output does not explain itself:\n%s", out)
 	}
 	assertNoTempWorktrees(t, w.a, tempDir, 1)
 
-	// The next landing from the same checkout finds nothing left to land.
 	out, err = land(t, w.a, Options{TempDir: tempDir})
 	if err != nil || !strings.Contains(out, "nothing to land") {
 		t.Errorf("second land: %v\n%s", err, out)
+	}
+}
+
+func TestLand_OnADirtyMainLeavesMainWhenTheChangesConflict(t *testing.T) {
+	w := newWorld(t)
+	commit(t, w.b, "README.md", "theirs\n", "docs: theirs")
+	run(t, w.b, "push", "-q", "origin", "main")
+	mine := commit(t, w.a, "a.txt", "a\n", "feat: from a")
+	write(t, w.a, "README.md", "half done\n")
+
+	out, err := land(t, w.a, Options{})
+	if err != nil {
+		t.Fatalf("land: %v\n%s", err, out)
+	}
+	if head := run(t, w.a, "rev-parse", "main"); head != mine {
+		t.Errorf("local main moved to %s over a conflicting change", head)
+	}
+	if got, _ := os.ReadFile(filepath.Join(w.a, "README.md")); string(got) != "half done\n" {
+		t.Errorf("README.md = %q; the uncommitted change was touched", got)
+	}
+	if !strings.Contains(out, "note: left main at") || !strings.Contains(out, "README.md") {
+		t.Errorf("no note naming the file:\n%s", out)
 	}
 }
 
@@ -264,10 +285,10 @@ func TestLand_ABranchLandsFromADirtyMainCheckout(t *testing.T) {
 		t.Fatalf("land: %v\n%s", err, out)
 	}
 	if got, _ := os.ReadFile(filepath.Join(w.a, "README.md")); string(got) != "half done\n" {
-		t.Errorf("README.md = %q; the uncommitted change was touched", got)
+		t.Errorf("README.md = %q; the uncommitted change was lost", got)
 	}
-	if run(t, w.a, "rev-parse", "main") == w.remoteMain(t) {
-		t.Error("local main moved under uncommitted changes")
+	if run(t, w.a, "rev-parse", "main") != w.remoteMain(t) {
+		t.Error("local main did not move to the landed merge")
 	}
 }
 
@@ -351,13 +372,12 @@ func TestLand_BranchFastForwardsACleanCheckedOutMain(t *testing.T) {
 	}
 }
 
-func TestLand_BranchLeavesADirtyMainWorktreeAlone(t *testing.T) {
+func TestLand_BranchFastForwardsADirtyMainWorktree(t *testing.T) {
 	w := newWorld(t)
 	mainTree := filepath.Join(t.TempDir(), "main-tree")
 	run(t, w.a, "checkout", "-q", "-b", "feature")
 	run(t, w.a, "worktree", "add", "-q", mainTree, "main")
 	write(t, mainTree, "README.md", "local edit\n")
-	before := run(t, mainTree, "rev-parse", "HEAD")
 	commit(t, w.a, "f.txt", "1\n", "feat: one")
 	tempDir := t.TempDir()
 
@@ -365,11 +385,11 @@ func TestLand_BranchLeavesADirtyMainWorktreeAlone(t *testing.T) {
 	if err != nil {
 		t.Fatalf("land: %v\n%s", err, out)
 	}
-	if run(t, mainTree, "rev-parse", "HEAD") != before {
-		t.Error("the dirty main worktree moved")
+	if run(t, mainTree, "rev-parse", "HEAD") != w.remoteMain(t) {
+		t.Errorf("the main worktree did not move:\n%s", out)
 	}
-	if !strings.Contains(out, "note: main is checked out at") {
-		t.Errorf("no note in output:\n%s", out)
+	if got, _ := os.ReadFile(filepath.Join(mainTree, "README.md")); string(got) != "local edit\n" {
+		t.Errorf("README.md = %q; the uncommitted change was lost", got)
 	}
 	assertNoTempWorktrees(t, w.a, tempDir, 2)
 }

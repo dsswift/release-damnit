@@ -13,7 +13,7 @@ release-damnit uses your existing Release Please configuration but reads git his
 - Reads `release-please-config.json` and `release-please-manifest.json` unchanged
 - Updates VERSION files and CHANGELOG.md in the same format
 - Creates GitHub releases with Release Please's tag naming (`{component}-v{version}`, or `v{version}` with `include-component-in-tag: false`)
-- Commands beside the default release run: `check-commit`, `check-commits`, `commit`, `land`, `hooks`, `publish`, `init` (see README.md)
+- Commands beside the default release run: `check-commit`, `check-commits`, `commit`, `land`, `sync`, `hooks`, `publish`, `init` (see README.md)
 - Correctly traverses merge commits to find all conventional commits
 
 ## Testing

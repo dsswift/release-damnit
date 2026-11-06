@@ -28,7 +28,7 @@ jobs:
           ref: ${{ github.ref_name }}
           fetch-depth: 0
       - id: release
-        uses: dsswift/release-damnit@v1.4.0
+        uses: dsswift/release-damnit@v1.8.2
         with:
           since-last-release: 'true'
           publish: 'true'

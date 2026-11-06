@@ -3,7 +3,7 @@ package scaffold
 import "strings"
 
 // DefaultActionRef is the release-damnit action a scaffolded workflow pins.
-const DefaultActionRef = "dsswift/release-damnit@v1.4.0"
+const DefaultActionRef = "dsswift/release-damnit@v1.8.2"
 
 // releaseWorkflow is the standard release workflow. USES is the action reference.
 const releaseWorkflow = `name: Release

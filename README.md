@@ -23,7 +23,7 @@ New single repos get all of this from `release-damnit init`.
 ### As a GitHub Action
 
 ```yaml
-- uses: dsswift/release-damnit@v1.4.0
+- uses: dsswift/release-damnit@v1.8.2
   with:
     token: ${{ secrets.GITHUB_TOKEN }}
     # Release every commit since each package's last release.
@@ -392,7 +392,7 @@ jobs:
           ref: ${{ github.ref_name }}
           fetch-depth: 0
       - id: release
-        uses: dsswift/release-damnit@v1.4.0
+        uses: dsswift/release-damnit@v1.8.2
         with:
           since-last-release: 'true'
           publish: 'true'

@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [1.8.2](https://github.com/dsswift/release-damnit/compare/v1.8.1...v1.8.2) (2026-11-06)
+
+### Bug Fixes
+
+* leave a moved branch's release to its run ([98e544a](https://github.com/dsswift/release-damnit/commit/98e544aa63ae34617896e0285311defea538e45d))
+
 ## [1.8.1](https://github.com/dsswift/release-damnit/compare/v1.8.0...v1.8.1) (2026-10-30)
 
 ### Bug Fixes

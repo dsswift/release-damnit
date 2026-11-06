@@ -148,7 +148,10 @@ func Run(opts Options) (Outcome, error) {
 		return Outcome{}, err
 	}
 
-	commit, err := p.pushCommit(tags)
+	commit, err := p.pushCommit(cfg, releases, tags)
+	if errors.Is(err, errSupersede) {
+		return Outcome{}, nil
+	}
 	if err != nil {
 		return Outcome{}, err
 	}
@@ -332,9 +335,19 @@ func (p *publisher) tag(tags []Tag, move bool) error {
 	return nil
 }
 
+// errSupersede says a commit that releases one of the packages landed while
+// this run was publishing. This run pushes nothing: the run of that commit
+// releases everything since the last tag, the new commit included, at the
+// bump it calls for.
+var errSupersede = errors.New("a releasable commit landed meanwhile")
+
 // pushCommit pushes HEAD to the branch. When the branch moved meanwhile, it
-// rebases the version commit onto the new tip, moves the tags, and retries.
-func (p *publisher) pushCommit(tags []Tag) (string, error) {
+// rebases the version commit onto the new tip, moves the tags, and retries,
+// unless what landed would itself release one of the packages: then the
+// version commit would sit on top of that change without counting it, and
+// every later run would start from a tag that has it, so its bump would be
+// lost. It steps aside instead.
+func (p *publisher) pushCommit(cfg *config.Config, releases []*release.PackageRelease, tags []Tag) (string, error) {
 	for attempt := 1; ; attempt++ {
 		p.logf("attempt %d/%d: pushing the version commit to %s/%s", attempt, p.Attempts, p.Remote, p.Branch)
 		push := []string{"push"}
@@ -356,6 +369,12 @@ func (p *publisher) pushCommit(tags []Tag) (string, error) {
 			return "", fmt.Errorf("%s/%s kept moving; gave up after %d attempts", p.Remote, p.Branch, attempt)
 		}
 		tip, _ := p.git("rev-parse", "--short", tracking)
+		if sha, ok, err := p.releasableSince(cfg, releases, tracking); err != nil {
+			return "", err
+		} else if ok {
+			p.logf("%s/%s moved (now %s) and %s releases %s too; leaving the release to its run", p.Remote, p.Branch, tip, sha, strings.Join(componentNames(releases), ", "))
+			return "", errSupersede
+		}
 		p.logf("%s/%s moved (now %s); rebasing the version commit onto it, retrying (attempt %d/%d)", p.Remote, p.Branch, tip, attempt+1, p.Attempts)
 		if err := p.rebase(tracking); err != nil {
 			return "", err
@@ -364,6 +383,40 @@ func (p *publisher) pushCommit(tags []Tag) (string, error) {
 			return "", err
 		}
 	}
+}
+
+// releasableSince finds a commit between the version commit's parent and
+// the moved branch tip that releases one of the packages being released.
+func (p *publisher) releasableSince(cfg *config.Config, releases []*release.PackageRelease, tip string) (string, bool, error) {
+	commits, err := git.GetCommitsInRange(p.root, "HEAD^", tip)
+	if err != nil {
+		return "", false, err
+	}
+	for _, c := range commits {
+		if !c.IsBreaking && version.CommitTypeToBump(c.Type) == version.None {
+			continue
+		}
+		for _, f := range c.Files {
+			pkg := cfg.FindPackageForPath(f)
+			if pkg == nil {
+				continue
+			}
+			for _, rel := range releases {
+				if rel.Package.Path == pkg.Path {
+					return c.ShortSHA, true, nil
+				}
+			}
+		}
+	}
+	return "", false, nil
+}
+
+func componentNames(releases []*release.PackageRelease) []string {
+	out := make([]string, len(releases))
+	for i, rel := range releases {
+		out[i] = rel.Package.Component
+	}
+	return out
 }
 
 func (p *publisher) rebase(onto string) error {

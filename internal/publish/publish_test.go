@@ -195,6 +195,42 @@ exit 0
 	}
 }
 
+func TestPublish_StepsAsideWhenAReleasableCommitLandsMeanwhile(t *testing.T) {
+	c := newCI(t, singleRepo, `{".": "1.0.0"}`, singleRepoFiles())
+	commit(t, c.checkout, "feature.go", "package main\n", "feat: add a feature")
+	run(t, c.checkout, "push", "-q", "origin", "main")
+	run(t, c.other, "pull", "-q", "origin", "main")
+	breaking := commit(t, c.other, "api.go", "package main\n", "feat!: break the api")
+	report := analyze(t, c.checkout, "")
+
+	marker := filepath.Join(t.TempDir(), "raced")
+	write(t, c.checkout, ".git/hooks/pre-push", `#!/bin/sh
+if [ ! -f "`+marker+`" ]; then
+  touch "`+marker+`"
+  unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE
+  git -C "`+c.other+`" push -q origin HEAD:refs/heads/main >&2
+fi
+exit 0
+`)
+
+	outcome, fake, out, err := publish(t, c.checkout, report)
+	if err != nil {
+		t.Fatalf("publish: %v\n%s", err, out)
+	}
+	if outcome.Released || len(fake.tags) != 0 {
+		t.Errorf("released %v with tags %v; a v1.1.0 over a breaking commit would hide it from every later run", outcome.Released, fake.tags)
+	}
+	if main := run(t, c.remote, "rev-parse", "main"); main != breaking {
+		t.Errorf("remote main = %s, want the breaking commit %s left for its own run", main, breaking)
+	}
+	if tags := run(t, c.remote, "tag"); tags != "" {
+		t.Errorf("tags pushed: %s", tags)
+	}
+	if !strings.Contains(out, "leaving the release to its run") {
+		t.Errorf("output:\n%s", out)
+	}
+}
+
 func TestPublish_RebaseConflictPushesNothing(t *testing.T) {
 	c := newCI(t, singleRepo, `{".": "1.0.0"}`, singleRepoFiles())
 	commit(t, c.checkout, "feature.go", "package main\n", "fix: repair")

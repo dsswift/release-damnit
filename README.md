@@ -194,7 +194,7 @@ release-damnit publish --report-file report.json --add package-lock.json
 
 1. It commits exactly the files the release wrote (VERSION, changelog, extra-files, manifest) plus each `--add` path, as `chore: release web v1.1.0, api v0.3.1 [skip ci]`. A single package with bare tags gets `chore: release v1.4.0 [skip ci]`.
 2. It makes an annotated tag per release on that commit.
-3. It pushes the commit, then the tags. When the branch moved, it rebases the version commit onto the new tip, moves the tags, and retries.
+3. It pushes the commit, then the tags. When the branch moved, it rebases the version commit onto the new tip, moves the tags, and retries. When what landed would itself release one of the packages (a `feat`, `fix`, `perf`, or breaking commit that touches it), it pushes nothing instead: the version commit would sit on top of that change without counting it, and the next run, starting from the new tag, would never see it. The run of that commit releases everything since the last tag, at the bump it calls for.
 4. It creates the GitHub or GitLab releases on the pushed tags.
 
 A report with no releases does nothing. Options: `--report-file` (required), `--remote` (`origin`), `--branch` (`main`), `--provider` (`auto`, `github`, `gitlab`), `--gitlab-token` (or `GITLAB_RELEASE_TOKEN`), `--attempts` (5), `--add <path>` (repeatable), `--skip-ci` (`message` or `push-option`).

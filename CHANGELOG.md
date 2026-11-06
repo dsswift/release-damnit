@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [1.8.3](https://github.com/dsswift/release-damnit/compare/v1.8.2...v1.8.3) (2026-11-06)
+
+### Bug Fixes
+
+* pin scaffolded workflows to v1.8.2 ([6c56e9f](https://github.com/dsswift/release-damnit/commit/6c56e9f9064c60f04c8c328cd4b48056136945e5))
+
 ## [1.8.2](https://github.com/dsswift/release-damnit/compare/v1.8.1...v1.8.2) (2026-11-06)
 
 ### Bug Fixes

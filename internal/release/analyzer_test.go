@@ -589,14 +589,12 @@ func TestAnalyze_Stats_UnmatchedCommits(t *testing.T) {
 	}
 }
 
-func TestAnalyze_Stats_NoCommits(t *testing.T) {
+func TestAnalyze_ARepositorysFirstCommitIsAnalyzed(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test in short mode")
 	}
 
 	dir := createTestRepo(t)
-
-	// Create config
 	writeFile(t, dir, "release-please-config.json", `{
 		"packages": {
 			"workloads/service-a": {"component": "service-a"}
@@ -606,33 +604,50 @@ func TestAnalyze_Stats_NoCommits(t *testing.T) {
 		"workloads/service-a": "0.1.0"
 	}`)
 	writeFile(t, dir, "workloads/service-a/VERSION", "0.1.0\n")
-
 	runCmd(t, dir, "git", "add", "-A")
 	runCmd(t, dir, "git", "commit", "-m", "chore: initial commit")
 
-	// Analyze (single commit repo, HEAD~1 will fail, so 0 commits analyzed)
-	opts := &Options{
-		RepoPath: dir,
-		DryRun:   true,
-	}
-
-	result, err := Analyze(opts)
+	result, err := Analyze(&Options{RepoPath: dir, DryRun: true})
 	if err != nil {
 		t.Fatalf("Analyze failed: %v", err)
 	}
-
-	// Stats should exist but show 0 commits
 	if result.Stats == nil {
 		t.Fatal("expected Stats to be set")
 	}
-	if result.Stats.TotalCommits != 0 {
-		t.Errorf("expected TotalCommits=0, got %d", result.Stats.TotalCommits)
+	if result.Stats.TotalCommits != 1 || result.Stats.MatchedCommits != 1 {
+		t.Errorf("want the first commit analyzed and matched by its files, got total %d, matched %d", result.Stats.TotalCommits, result.Stats.MatchedCommits)
 	}
-	if result.Stats.MatchedCommits != 0 {
-		t.Errorf("expected MatchedCommits=0, got %d", result.Stats.MatchedCommits)
+	if len(result.Releases) != 0 {
+		t.Errorf("a chore releases nothing, got %#v", result.Releases)
 	}
-	if result.Stats.UnmatchedCommits != 0 {
-		t.Errorf("expected UnmatchedCommits=0, got %d", result.Stats.UnmatchedCommits)
+}
+
+func TestAnalyze_AFirstPushThatAddsAFeatureIsReleased(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test in short mode")
+	}
+
+	dir := createTestRepo(t)
+	writeFile(t, dir, "release-please-config.json", `{
+		"include-component-in-tag": false,
+		"packages": {
+			".": {"component": "pusher"}
+		}
+	}`)
+	writeFile(t, dir, "release-please-manifest.json", `{
+		".": "0.0.0"
+	}`)
+	writeFile(t, dir, "VERSION", "0.0.0\n")
+	writeFile(t, dir, "main.go", "package main\n")
+	runCmd(t, dir, "git", "add", "-A")
+	runCmd(t, dir, "git", "commit", "-m", "feat(pusher): push what runs")
+
+	result, err := Analyze(&Options{RepoPath: dir, DryRun: true, SinceLastRelease: true, TreatPreMajorAsMinor: true})
+	if err != nil {
+		t.Fatalf("Analyze failed: %v", err)
+	}
+	if len(result.Releases) != 1 || len(result.Releases[0].Commits) != 1 {
+		t.Fatalf("want the first commit released, got %#v", result.Releases)
 	}
 }
 

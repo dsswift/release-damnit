@@ -142,8 +142,10 @@ func Analyze(opts *Options) (*AnalysisResult, error) {
 		// This may fail if there's only one commit in the repo
 		commits, err = git.GetCommitsInRange(opts.RepoPath, "HEAD~1", "HEAD")
 		if err != nil {
-			// If HEAD~1 doesn't exist (single commit repo), return empty commits
-			commits = nil
+			// A repository with a single commit has no HEAD~1: that commit is the one to analyze.
+			if commits, err = git.GetHeadAlone(opts.RepoPath); err != nil {
+				return nil, err
+			}
 		}
 	}
 
@@ -233,8 +235,10 @@ func commitsSinceLastRelease(repoPath string, cfg *config.Config, fallback strin
 			if base != "HEAD~1" {
 				return nil, fmt.Errorf("failed to get commits since %s: %w", base, err)
 			}
-			// A repository with a single commit has no HEAD~1.
-			commits = nil
+			// A repository with a single commit has no HEAD~1: that commit is the one to analyze.
+			if commits, err = git.GetHeadAlone(repoPath); err != nil {
+				return nil, err
+			}
 		}
 		byBase[base] = commits
 		return commits, nil

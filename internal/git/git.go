@@ -167,20 +167,29 @@ func GetCommitsInRange(repoPath, base, head string) ([]*Commit, error) {
 	return commits, nil
 }
 
-// GetCommitsSinceLastTag returns commits since the last tag matching the pattern.
-// If no tag is found, returns all commits.
-func GetCommitsSinceLastTag(repoPath, tagPattern string) ([]*Commit, error) {
+// GetHeadAlone returns HEAD as the one commit to analyze when it is the repository's first commit,
+// so a repository's first push is released like any other. It returns nothing when HEAD has a parent.
+func GetHeadAlone(repoPath string) ([]*Commit, error) {
 	contracts.RequireNotEmpty(repoPath, "repoPath")
 
-	// Get the most recent tag matching pattern
-	tag, err := runGit(repoPath, "describe", "--tags", "--abbrev=0", "--match", tagPattern)
-	if err != nil {
-		// No matching tag - get all commits from root
-		// Use empty tree as base
-		return GetCommitsInRange(repoPath, "$(git rev-list --max-parents=0 HEAD)", "HEAD")
+	if _, err := runGit(repoPath, "rev-parse", "--verify", "--quiet", "HEAD^"); err == nil {
+		return nil, nil
 	}
-
-	return GetCommitsInRange(repoPath, tag, "HEAD")
+	output, err := runGit(repoPath, "log", "-1", "--format=%H|%s", "HEAD")
+	if err != nil {
+		return nil, fmt.Errorf("failed to read HEAD: %w", err)
+	}
+	parts := strings.SplitN(output, "|", 2)
+	if len(parts) != 2 {
+		return nil, fmt.Errorf("unexpected log line for HEAD: %q", output)
+	}
+	commit := parseCommit(parts[0], parts[1])
+	files, err := getChangedFiles(repoPath, parts[0])
+	if err != nil {
+		return nil, fmt.Errorf("failed to get changed files for %s: %w", commit.ShortSHA, err)
+	}
+	commit.Files = files
+	return []*Commit{commit}, nil
 }
 
 // parseCommit parses a commit SHA and subject into a Commit struct.
@@ -208,7 +217,8 @@ func parseCommit(sha, subject string) *Commit {
 
 // getChangedFiles returns the list of files changed by a commit.
 func getChangedFiles(repoPath, sha string) ([]string, error) {
-	output, err := runGit(repoPath, "diff-tree", "--no-commit-id", "--name-only", "-r", sha)
+	// --root lists a first commit's files against the empty tree; without it a commit with no parent lists none.
+	output, err := runGit(repoPath, "diff-tree", "--root", "--no-commit-id", "--name-only", "-r", sha)
 	if err != nil {
 		return nil, err
 	}

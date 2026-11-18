@@ -17,13 +17,36 @@ on:
 permissions:
   contents: write
 
+env:
+  IMAGE: ghcr.io/dsswift/release-damnit
+
+# Beside the release assets, the cli artifact carries the binaries a machine
+# installs, as one signed OCI artifact, ghcr.io/dsswift/release-damnit:cli-1.4.0,
+# one layer a file, so an estate's forge can verify and serve it with no
+# GitHub credential. The tag must match VERSION; that file is the source of truth.
 jobs:
   binaries:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+      # Needed to get an OIDC token for keyless signing.
+      id-token: write
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.tag }}
+      - name: Check the tag matches VERSION
+        id: version
+        env:
+          TAG: ${{ inputs.tag }}
+        run: |
+          version=$(cut -d' ' -f1 VERSION)
+          if [ "v$version" != "$TAG" ]; then
+            echo "Tag $TAG does not match VERSION $version" >&2
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
@@ -36,3 +59,38 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ inputs.tag }}
         run: gh release upload "$TAG" build/* --clobber
+      # One file a platform, named so a script picks its own by name.
+      - name: Gather the cli artifact
+        run: |
+          set -eu
+          mkdir -p cli
+          cp build/release-damnit-darwin-arm64 build/release-damnit-linux-amd64 cli/
+          (cd cli && sha256sum * > SHA256SUMS && cat SHA256SUMS)
+      - uses: oras-project/setup-oras@v1
+      - uses: sigstore/cosign-installer@v3
+      - name: Push the cli as an OCI artifact
+        id: push
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -eu
+          echo "${{ secrets.GITHUB_TOKEN }}" | oras login ghcr.io -u "${{ github.actor }}" --password-stdin
+          cd cli
+          oras push "${IMAGE}:cli-${VERSION}" \
+            --artifact-type application/vnd.dsswift.release-damnit-cli.v1 \
+            --annotation "org.opencontainers.image.source=https://github.com/${{ github.repository }}" \
+            --annotation "org.opencontainers.image.version=${VERSION}" \
+            --format go-template='{{.digest}}' \
+            release-damnit-darwin-arm64:application/octet-stream \
+            release-damnit-linux-amd64:application/octet-stream \
+            SHA256SUMS:text/plain > ../digest.txt
+          echo "digest=$(cat ../digest.txt)" >> "$GITHUB_OUTPUT"
+      # Sign by digest, never by tag: a tag can move.
+      - name: Sign and verify the cli
+        env:
+          REF: ${{ env.IMAGE }}@${{ steps.push.outputs.digest }}
+        run: |
+          cosign sign --yes "$REF"
+          cosign verify "$REF" \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+            --certificate-identity-regexp '^https://github.com/${{ github.repository }}/' > /dev/null

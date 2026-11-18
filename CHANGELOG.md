@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [1.9.0](https://github.com/dsswift/release-damnit/compare/v1.8.4...v1.9.0) (2026-11-18)
+
+### Features
+
+* **release-damnit:** publish a signed cli to ghcr ([9ac938c](https://github.com/dsswift/release-damnit/commit/9ac938cc6715c0b3c8378d99d8246e56d9a23731))
+
 ## [1.8.4](https://github.com/dsswift/release-damnit/compare/v1.8.3...v1.8.4) (2026-11-16)
 
 ### Bug Fixes

@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/dsswift/release-damnit/internal/config"
 	"github.com/dsswift/release-damnit/internal/git"
@@ -429,16 +430,29 @@ func (p *publisher) rebase(onto string) error {
 	return nil
 }
 
+// tagRetryPause is the wait before each further tag push, times the attempt.
+var tagRetryPause = 2 * time.Second
+
+// pushTags pushes the tags of a version commit that is already on the
+// branch. A refused tag push is retried: once the commit is pushed, a run
+// that stops here leaves a version no later run can tag.
 func (p *publisher) pushTags(tags []Tag) error {
 	args := []string{"push", p.Remote}
 	for _, t := range tags {
 		args = append(args, "refs/tags/"+t.Name)
 	}
-	if err := git.Stream(p.root, p.Out, args...); err != nil {
-		return fmt.Errorf("the version commit is pushed but its tags are not: %w", err)
+	for attempt := 1; ; attempt++ {
+		err := git.Stream(p.root, p.Out, args...)
+		if err == nil {
+			p.logf("pushed %d tag(s)", len(tags))
+			return nil
+		}
+		if attempt >= p.Attempts {
+			return fmt.Errorf("the version commit is pushed but its tags are not, after %d attempts: %w", attempt, err)
+		}
+		p.logf("the tag push was refused; retrying (attempt %d/%d)", attempt+1, p.Attempts)
+		time.Sleep(tagRetryPause * time.Duration(attempt))
 	}
-	p.logf("pushed %d tag(s)", len(tags))
-	return nil
 }
 
 // WriteGitHubOutput appends the publish outputs to a GitHub Actions output file.

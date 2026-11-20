@@ -161,6 +161,34 @@ func TestPublish_TagsTheVersionCommit(t *testing.T) {
 	}
 }
 
+func TestPublish_RetriesARefusedTagPush(t *testing.T) {
+	c := newCI(t, singleRepo, `{".": "1.0.0"}`, singleRepoFiles())
+	commit(t, c.checkout, "feature.go", "package main\n", "feat: add a feature")
+	run(t, c.checkout, "push", "-q", "origin", "main")
+	report := analyze(t, c.checkout, "")
+	// The remote refuses the first push that carries a tag, as a forge does
+	// when it fails a ref update on its side.
+	write(t, c.remote, "hooks/pre-receive", `#!/bin/sh
+while read old new ref; do
+  case "$ref" in refs/tags/*)
+    if [ ! -f refused ]; then touch refused; echo "refusing $ref once" >&2; exit 1; fi ;;
+  esac
+done
+`)
+	tagRetryPause = 0
+
+	outcome, _, out, err := publish(t, c.checkout, report)
+	if err != nil {
+		t.Fatalf("publish: %v\n%s", err, out)
+	}
+	if tagged := run(t, c.remote, "rev-parse", "v1.1.0^{commit}"); tagged != outcome.Commit {
+		t.Errorf("v1.1.0 points at %s, want the version commit %s", tagged, outcome.Commit)
+	}
+	if !strings.Contains(out, "the tag push was refused; retrying (attempt 2/5)") {
+		t.Errorf("output does not say the tag push was retried:\n%s", out)
+	}
+}
+
 func TestPublish_RetriesAndMovesTheTagsWhenTheBranchMoves(t *testing.T) {
 	c := newCI(t, singleRepo, `{".": "1.0.0"}`, singleRepoFiles())
 	commit(t, c.checkout, "feature.go", "package main\n", "fix: repair a thing")

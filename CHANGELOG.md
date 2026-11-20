@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [1.9.1](https://github.com/dsswift/release-damnit/compare/v1.9.0...v1.9.1) (2026-11-20)
+
+### Bug Fixes
+
+* retry a refused tag push ([51c2360](https://github.com/dsswift/release-damnit/commit/51c2360bf9c1eb922a93299429941003e2582cd9))
+
 ## [1.9.0](https://github.com/dsswift/release-damnit/compare/v1.8.4...v1.9.0) (2026-11-18)
 
 ### Features

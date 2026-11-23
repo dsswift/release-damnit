@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [1.9.4](https://github.com/dsswift/release-damnit/compare/v1.9.3...v1.9.4) (2026-11-23)
+
+### Bug Fixes
+
+* **release-damnit:** remove estate names from examples ([373c3ca](https://github.com/dsswift/release-damnit/commit/373c3caf3a097c5e1f21729394303fa75da43770))
+
 ## [1.9.3](https://github.com/dsswift/release-damnit/compare/v1.9.2...v1.9.3) (2026-11-23)
 
 ### Bug Fixes

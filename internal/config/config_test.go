@@ -220,11 +220,11 @@ func TestFindPackageForPath_BasicMatch(t *testing.T) {
 func TestFindPackageForPath_DeepestMatchWins(t *testing.T) {
 	configJSON := `{
 		"packages": {
-			"workloads/jarvis": {"component": "jarvis"},
-			"workloads/jarvis/clients/web": {"component": "jarvis-web"}
+			"workloads/beacon": {"component": "beacon"},
+			"workloads/beacon/clients/web": {"component": "beacon-web"}
 		}
 	}`
-	manifestJSON := `{"workloads/jarvis": "1.0.0", "workloads/jarvis/clients/web": "1.0.0"}`
+	manifestJSON := `{"workloads/beacon": "1.0.0", "workloads/beacon/clients/web": "1.0.0"}`
 
 	dir := createTestRepo(t, configJSON, manifestJSON)
 	cfg, _ := Load(dir)
@@ -233,9 +233,9 @@ func TestFindPackageForPath_DeepestMatchWins(t *testing.T) {
 		path     string
 		expected string
 	}{
-		{"workloads/jarvis/backend/main.go", "jarvis"},
-		{"workloads/jarvis/clients/web/src/App.tsx", "jarvis-web"},
-		{"workloads/jarvis/clients/android/app.kt", "jarvis"}, // Falls back to parent
+		{"workloads/beacon/backend/main.go", "beacon"},
+		{"workloads/beacon/clients/web/src/App.tsx", "beacon-web"},
+		{"workloads/beacon/clients/android/app.kt", "beacon"}, // Falls back to parent
 	}
 
 	for _, tc := range tests {
@@ -349,11 +349,11 @@ func TestNormalizePath(t *testing.T) {
 		input    string
 		expected string
 	}{
-		{"./workloads/jarvis", "workloads/jarvis"},
-		{"workloads/jarvis/", "workloads/jarvis"},
-		{"/workloads/jarvis", "workloads/jarvis"},
-		{"./workloads/jarvis/", "workloads/jarvis"},
-		{"workloads/jarvis", "workloads/jarvis"},
+		{"./workloads/beacon", "workloads/beacon"},
+		{"workloads/beacon/", "workloads/beacon"},
+		{"/workloads/beacon", "workloads/beacon"},
+		{"./workloads/beacon/", "workloads/beacon"},
+		{"workloads/beacon", "workloads/beacon"},
 	}
 
 	for _, tc := range tests {

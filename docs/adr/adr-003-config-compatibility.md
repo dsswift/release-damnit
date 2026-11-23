@@ -42,16 +42,16 @@ We support the subset of `release-please-config.json` that matters for versionin
 {
   "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
   "packages": {
-    "workloads/jarvis": {
-      "component": "jarvis",
+    "workloads/beacon": {
+      "component": "beacon",
       "changelog-path": "CHANGELOG.md"
     }
   },
   "plugins": [
     {
       "type": "linked-versions",
-      "groupName": "ma-observe",
-      "components": ["ma-observe-client", "ma-observe-server"]
+      "groupName": "comet",
+      "components": ["comet-client", "comet-server"]
     }
   ]
 }
@@ -86,8 +86,8 @@ We read and write `release-please-manifest.json`:
 
 ```json
 {
-  "workloads/jarvis": "0.1.119",
-  "workloads/jarvis/clients/web": "0.1.10"
+  "workloads/beacon": "0.1.119",
+  "workloads/beacon/clients/web": "0.1.10"
 }
 ```
 
@@ -106,7 +106,7 @@ The comment marker is optional but we preserve it if present. We only update the
 We generate changelog entries matching Release Please's conventional-changelog format:
 
 ```markdown
-## [0.1.120](https://github.com/owner/repo/compare/jarvis-v0.1.119...jarvis-v0.1.120) (2024-01-15)
+## [0.1.120](https://github.com/owner/repo/compare/beacon-v0.1.119...beacon-v0.1.120) (2024-01-15)
 
 ### Features
 

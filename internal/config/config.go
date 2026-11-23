@@ -17,7 +17,7 @@ import (
 // Config represents the parsed release-please-config.json and manifest.
 type Config struct {
 	// Packages maps path (relative to repo root) to package configuration.
-	// Path is the key (e.g., "workloads/jarvis").
+	// Path is the key (e.g., "workloads/beacon").
 	Packages map[string]*Package
 
 	// LinkedGroups maps group name to the set of component names that are linked.
@@ -57,7 +57,7 @@ const DefaultSubjectMaxLength = 50
 
 // Package represents a single package's configuration.
 type Package struct {
-	// Path is the relative path from repo root (e.g., "workloads/jarvis").
+	// Path is the relative path from repo root (e.g., "workloads/beacon").
 	// The root package (keyed "." in the config) has the empty path.
 	Path string
 
@@ -66,7 +66,7 @@ type Package struct {
 	// else "." for the root package.
 	ManifestKey string
 
-	// Component is the package name used in releases (e.g., "jarvis").
+	// Component is the package name used in releases (e.g., "beacon").
 	Component string
 
 	// ChangelogPath is the relative path to changelog from package root.

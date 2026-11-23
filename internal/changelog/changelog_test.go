@@ -165,7 +165,7 @@ func TestBuildCompareURL(t *testing.T) {
 		newTag  string
 		want    string
 	}{
-		{"component tags", "https://github.com/owner/repo", "jarvis-v1.0.0", "jarvis-v1.1.0", "https://github.com/owner/repo/compare/jarvis-v1.0.0...jarvis-v1.1.0"},
+		{"component tags", "https://github.com/owner/repo", "beacon-v1.0.0", "beacon-v1.1.0", "https://github.com/owner/repo/compare/beacon-v1.0.0...beacon-v1.1.0"},
 		{"trailing slash", "https://github.com/owner/repo/", "api-v0.1.0", "api-v0.2.0", "https://github.com/owner/repo/compare/api-v0.1.0...api-v0.2.0"},
 		{"bare version tags", "https://github.com/owner/repo", "v1.3.0", "v1.4.0", "https://github.com/owner/repo/compare/v1.3.0...v1.4.0"},
 		{"slash separator for a nested go module", "https://github.com/owner/repo", "sdk/go/v1.0.0", "sdk/go/v1.1.0", "https://github.com/owner/repo/compare/sdk/go/v1.0.0...sdk/go/v1.1.0"},

@@ -15,7 +15,7 @@ type ReleaseReport struct {
 	Releases []ComponentRelease `json:"releases"`
 
 	// Components is a flat list of component names that were released.
-	// Enables simple checks: contains(fromJSON(outputs.release_report).components, 'jarvis')
+	// Enables simple checks: contains(fromJSON(outputs.release_report).components, 'beacon')
 	Components []string `json:"components"`
 
 	// Summary provides aggregate statistics about the release.
@@ -24,10 +24,10 @@ type ReleaseReport struct {
 
 // ComponentRelease contains release information for a single component.
 type ComponentRelease struct {
-	// Component is the package name (e.g., "jarvis").
+	// Component is the package name (e.g., "beacon").
 	Component string `json:"component"`
 
-	// Path is the relative path from repo root (e.g., "workloads/jarvis").
+	// Path is the relative path from repo root (e.g., "workloads/beacon").
 	Path string `json:"path"`
 
 	// OldVersion is the previous version.
@@ -39,7 +39,7 @@ type ComponentRelease struct {
 	// BumpType is "major", "minor", or "patch".
 	BumpType string `json:"bump_type"`
 
-	// TagName is the git tag (e.g., "jarvis-v0.1.120", or "sdk/go/v1.0.0"
+	// TagName is the git tag (e.g., "beacon-v0.1.120", or "sdk/go/v1.0.0"
 	// for a package configured with a "/" tag-separator).
 	//
 	// Consumers should read this field rather than rebuilding the tag from

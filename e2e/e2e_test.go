@@ -4,9 +4,9 @@
 // Package e2e contains end-to-end tests that run against the mock--gitops-playground
 // GitHub repository. These tests require network access and GitHub authentication.
 //
-// The mock repo mirrors sh-monorepo structure with:
-// - Nested packages (jarvis, jarvis-web inside jarvis/clients/web)
-// - Linked versions (ma-observe-client and ma-observe-server)
+// The mock repo mirrors the structure of a production monorepo with:
+// - Nested packages (beacon, beacon-web inside beacon/clients/web)
+// - Linked versions (comet-client and comet-server)
 // - Multiple feature branches testing different scenarios
 //
 // Run with: go test -tags=e2e ./e2e/...
@@ -72,7 +72,7 @@ func runCmdIgnoreError(dir string, name string, args ...string) {
 // =============================================================================
 
 // TestE2E_Scenario_SingleFeat tests a single feat commit to one package.
-// Expected: jarvis bumps from 0.1.0 to 0.1.1
+// Expected: beacon bumps from 0.1.0 to 0.1.1
 func TestE2E_Scenario_SingleFeat(t *testing.T) {
 	dir := cloneMockRepo(t)
 
@@ -101,14 +101,14 @@ func TestE2E_Scenario_SingleFeat(t *testing.T) {
 		t.Errorf("expected 1 commit, got %d", len(result.Commits))
 	}
 
-	// Should have 1 release (jarvis only)
+	// Should have 1 release (beacon only)
 	if len(result.Releases) != 1 {
 		t.Fatalf("expected 1 release, got %d", len(result.Releases))
 	}
 
 	rel := result.Releases[0]
-	if rel.Package.Component != "jarvis" {
-		t.Errorf("expected jarvis, got %s", rel.Package.Component)
+	if rel.Package.Component != "beacon" {
+		t.Errorf("expected beacon, got %s", rel.Package.Component)
 	}
 	if rel.OldVersion != "0.1.0" {
 		t.Errorf("expected old version 0.1.0, got %s", rel.OldVersion)
@@ -119,7 +119,7 @@ func TestE2E_Scenario_SingleFeat(t *testing.T) {
 }
 
 // TestE2E_Scenario_MultiPackage tests commits touching multiple packages.
-// Expected: jarvis, sandbox-portal, infrastructure all bump to 0.1.1
+// Expected: beacon, sandbox-portal, infrastructure all bump to 0.1.1
 func TestE2E_Scenario_MultiPackage(t *testing.T) {
 	dir := cloneMockRepo(t)
 
@@ -154,7 +154,7 @@ func TestE2E_Scenario_MultiPackage(t *testing.T) {
 		components[rel.Package.Component] = rel
 	}
 
-	expectedComponents := []string{"jarvis", "sandbox-portal", "infrastructure"}
+	expectedComponents := []string{"beacon", "sandbox-portal", "infrastructure"}
 	for _, comp := range expectedComponents {
 		rel, ok := components[comp]
 		if !ok {
@@ -212,7 +212,7 @@ func TestE2E_Scenario_BreakingChange(t *testing.T) {
 }
 
 // TestE2E_Scenario_LinkedVersions tests linked versions behavior.
-// Expected: Change to ma-observe-client bumps BOTH client and server
+// Expected: Change to comet-client bumps BOTH client and server
 func TestE2E_Scenario_LinkedVersions(t *testing.T) {
 	dir := cloneMockRepo(t)
 
@@ -247,16 +247,16 @@ func TestE2E_Scenario_LinkedVersions(t *testing.T) {
 		components[rel.Package.Component] = rel.NewVersion
 	}
 
-	if _, ok := components["ma-observe-client"]; !ok {
-		t.Error("missing ma-observe-client release")
+	if _, ok := components["comet-client"]; !ok {
+		t.Error("missing comet-client release")
 	}
-	if _, ok := components["ma-observe-server"]; !ok {
-		t.Error("missing ma-observe-server release (should be linked)")
+	if _, ok := components["comet-server"]; !ok {
+		t.Error("missing comet-server release (should be linked)")
 	}
 
 	// Both should have same version
-	clientVersion := components["ma-observe-client"]
-	serverVersion := components["ma-observe-server"]
+	clientVersion := components["comet-client"]
+	serverVersion := components["comet-server"]
 	if clientVersion != serverVersion {
 		t.Errorf("linked packages have different versions: client=%s, server=%s", clientVersion, serverVersion)
 	}
@@ -266,7 +266,7 @@ func TestE2E_Scenario_LinkedVersions(t *testing.T) {
 }
 
 // TestE2E_Scenario_StackedCommits tests multiple commits with varying severities.
-// Expected: Highest severity (feat) wins, jarvis-discord bumps to 0.1.1
+// Expected: Highest severity (feat) wins, beacon-discord bumps to 0.1.1
 func TestE2E_Scenario_StackedCommits(t *testing.T) {
 	dir := cloneMockRepo(t)
 
@@ -306,14 +306,14 @@ func TestE2E_Scenario_StackedCommits(t *testing.T) {
 		t.Errorf("expected 1 feat commit, got %d", typeCounts["feat"])
 	}
 
-	// Should have 1 release (jarvis-discord)
+	// Should have 1 release (beacon-discord)
 	if len(result.Releases) != 1 {
 		t.Fatalf("expected 1 release, got %d", len(result.Releases))
 	}
 
 	rel := result.Releases[0]
-	if rel.Package.Component != "jarvis-discord" {
-		t.Errorf("expected jarvis-discord, got %s", rel.Package.Component)
+	if rel.Package.Component != "beacon-discord" {
+		t.Errorf("expected beacon-discord, got %s", rel.Package.Component)
 	}
 	// Feat wins over fix and chore
 	if rel.NewVersion != "0.1.1" {
@@ -322,7 +322,7 @@ func TestE2E_Scenario_StackedCommits(t *testing.T) {
 }
 
 // TestE2E_Scenario_NestedPackage tests nested package path matching.
-// Expected: Change to jarvis/clients/web bumps jarvis-web, NOT jarvis
+// Expected: Change to beacon/clients/web bumps beacon-web, NOT beacon
 func TestE2E_Scenario_NestedPackage(t *testing.T) {
 	dir := cloneMockRepo(t)
 
@@ -346,14 +346,14 @@ func TestE2E_Scenario_NestedPackage(t *testing.T) {
 		t.Errorf("expected 1 commit, got %d", len(result.Commits))
 	}
 
-	// Should have 1 release - jarvis-web (NOT jarvis)
+	// Should have 1 release - beacon-web (NOT beacon)
 	if len(result.Releases) != 1 {
 		t.Fatalf("expected 1 release, got %d", len(result.Releases))
 	}
 
 	rel := result.Releases[0]
-	if rel.Package.Component != "jarvis-web" {
-		t.Errorf("expected jarvis-web (deepest match), got %s", rel.Package.Component)
+	if rel.Package.Component != "beacon-web" {
+		t.Errorf("expected beacon-web (deepest match), got %s", rel.Package.Component)
 	}
 	if rel.NewVersion != "0.1.1" {
 		t.Errorf("expected 0.1.1, got %s", rel.NewVersion)
@@ -362,9 +362,9 @@ func TestE2E_Scenario_NestedPackage(t *testing.T) {
 
 // TestE2E_Scenario_ComplexMerge is the "kitchen sink" test.
 // It tests ALL package types in a single merge:
-// - Simple scopes: jarvis, sandbox-portal, infrastructure, sandbox-image-claude-code
-// - Linked scopes: ma-observe-client (triggers ma-observe-server with no direct commits)
-// - Nested scopes: jarvis-web (inside jarvis), jarvis-discord (inside jarvis)
+// - Simple scopes: beacon, sandbox-portal, infrastructure, sandbox-image-claude-code
+// - Linked scopes: comet-client (triggers comet-server with no direct commits)
+// - Nested scopes: beacon-web (inside beacon), beacon-discord (inside beacon)
 // - Multiple commit types: feat, fix, chore, feat! (breaking)
 // - Stacked commits: Multiple commits to same package where highest severity wins
 //
@@ -418,11 +418,11 @@ func TestE2E_Scenario_ComplexMerge(t *testing.T) {
 		bumpReason string
 		hasCommits bool
 	}{
-		"jarvis":                    {"0.2.0", "feat (minor bump)", true},
-		"jarvis-web":                {"0.2.0", "feat wins over fix and chore (minor bump)", true},
-		"jarvis-discord":            {"0.1.1", "fix only (patch bump)", true},
-		"ma-observe-client":         {"0.2.0", "feat wins over fix (minor bump)", true},
-		"ma-observe-server":         {"0.2.0", "linked (no direct commits)", false},
+		"beacon":                    {"0.2.0", "feat (minor bump)", true},
+		"beacon-web":                {"0.2.0", "feat wins over fix and chore (minor bump)", true},
+		"beacon-discord":            {"0.1.1", "fix only (patch bump)", true},
+		"comet-client":              {"0.2.0", "feat wins over fix (minor bump)", true},
+		"comet-server":              {"0.2.0", "linked (no direct commits)", false},
 		"sandbox-portal":            {"1.0.0", "feat! breaking (major bump)", true},
 		"sandbox-image-claude-code": {"0.2.0", "feat (minor bump)", true},
 		"infrastructure":            {"0.1.1", "fix (patch bump)", true},
@@ -441,10 +441,10 @@ func TestE2E_Scenario_ComplexMerge(t *testing.T) {
 				component, expected.newVersion, expected.bumpReason, rel.NewVersion)
 		}
 
-		// Verify linked package (ma-observe-server) has no direct commits
-		if component == "ma-observe-server" {
+		// Verify linked package (comet-server) has no direct commits
+		if component == "comet-server" {
 			if len(rel.Commits) != 0 {
-				t.Errorf("ma-observe-server should have 0 direct commits (linked), got %d", len(rel.Commits))
+				t.Errorf("comet-server should have 0 direct commits (linked), got %d", len(rel.Commits))
 			}
 		}
 
@@ -481,15 +481,15 @@ func TestE2E_Scenario_ComplexMerge(t *testing.T) {
 	}
 
 	// Verify nested package matching worked correctly
-	// jarvis-web commits should NOT appear in jarvis releases
-	jarvisRel := releases["jarvis"]
-	for _, c := range jarvisRel.Commits {
+	// beacon-web commits should NOT appear in beacon releases
+	beaconRel := releases["beacon"]
+	for _, c := range beaconRel.Commits {
 		for _, f := range c.Files {
 			if strings.Contains(f, "clients/web") {
-				t.Errorf("jarvis release incorrectly contains jarvis-web commit: %s", c.Description)
+				t.Errorf("beacon release incorrectly contains beacon-web commit: %s", c.Description)
 			}
 			if strings.Contains(f, "clients/discord") {
-				t.Errorf("jarvis release incorrectly contains jarvis-discord commit: %s", c.Description)
+				t.Errorf("beacon release incorrectly contains beacon-discord commit: %s", c.Description)
 			}
 		}
 	}
@@ -545,7 +545,7 @@ func TestE2E_FullGitHubReleaseFlow_SingleFeat(t *testing.T) {
 
 	// Commit and push
 	runCmd(t, dir, "git", "add", "-A")
-	runCmd(t, dir, "git", "commit", "-m", "chore: release jarvis-v0.1.1")
+	runCmd(t, dir, "git", "commit", "-m", "chore: release beacon-v0.1.1")
 	runCmd(t, dir, "git", "push", "-u", "origin", testBranch)
 
 	// Track for cleanup
@@ -580,8 +580,8 @@ func TestE2E_FullGitHubReleaseFlow_SingleFeat(t *testing.T) {
 	}
 
 	ghRel := ghReleases[0]
-	if ghRel.TagName != "jarvis-v0.1.1" {
-		t.Errorf("expected tag jarvis-v0.1.1, got %s", ghRel.TagName)
+	if ghRel.TagName != "beacon-v0.1.1" {
+		t.Errorf("expected tag beacon-v0.1.1, got %s", ghRel.TagName)
 	}
 
 	// Verify on GitHub
@@ -624,7 +624,7 @@ func TestE2E_FullGitHubReleaseFlow_LinkedVersions(t *testing.T) {
 	}
 
 	runCmd(t, dir, "git", "add", "-A")
-	runCmd(t, dir, "git", "commit", "-m", "chore: release ma-observe-v0.1.1")
+	runCmd(t, dir, "git", "commit", "-m", "chore: release comet-v0.1.1")
 	runCmd(t, dir, "git", "push", "-u", "origin", testBranch)
 
 	var createdTags []string
@@ -657,7 +657,7 @@ func TestE2E_FullGitHubReleaseFlow_LinkedVersions(t *testing.T) {
 	}
 
 	// Verify both exist on GitHub
-	expectedTags := []string{"ma-observe-client-v0.1.1", "ma-observe-server-v0.1.1"}
+	expectedTags := []string{"comet-client-v0.1.1", "comet-server-v0.1.1"}
 	for _, expectedTag := range expectedTags {
 		found := false
 		for _, ghRel := range ghReleases {
@@ -743,7 +743,7 @@ func TestE2E_FullGitHubReleaseFlow_MultiPackage(t *testing.T) {
 
 	// Verify expected components
 	expectedComponents := map[string]bool{
-		"jarvis":         false,
+		"beacon":         false,
 		"sandbox-portal": false,
 		"infrastructure": false,
 	}
@@ -836,12 +836,12 @@ func TestE2E_FullGitHubReleaseFlow_ComplexMerge(t *testing.T) {
 
 	// Define expected tags (feat → minor bump with TreatPreMajorAsMinor: false)
 	expectedTags := map[string]string{
-		"jarvis":                    "jarvis-v0.2.0",
-		"jarvis-web":                "jarvis-web-v0.2.0",
-		"jarvis-discord":            "jarvis-discord-v0.1.1", // fix only → patch
-		"ma-observe-client":         "ma-observe-client-v0.2.0",
-		"ma-observe-server":         "ma-observe-server-v0.2.0", // linked
-		"sandbox-portal":            "sandbox-portal-v1.0.0",    // MAJOR bump!
+		"beacon":                    "beacon-v0.2.0",
+		"beacon-web":                "beacon-web-v0.2.0",
+		"beacon-discord":            "beacon-discord-v0.1.1", // fix only → patch
+		"comet-client":              "comet-client-v0.2.0",
+		"comet-server":              "comet-server-v0.2.0",   // linked
+		"sandbox-portal":            "sandbox-portal-v1.0.0", // MAJOR bump!
 		"sandbox-image-claude-code": "sandbox-image-claude-code-v0.2.0",
 		"infrastructure":            "infrastructure-v0.1.1", // fix only → patch
 	}
@@ -912,7 +912,7 @@ func TestE2E_ApplyUpdatesFiles(t *testing.T) {
 	}
 
 	// Verify VERSION file
-	versionPath := filepath.Join(dir, "workloads/jarvis/VERSION")
+	versionPath := filepath.Join(dir, "workloads/beacon/VERSION")
 	versionContent, err := os.ReadFile(versionPath)
 	if err != nil {
 		t.Fatalf("failed to read VERSION: %v", err)
@@ -922,7 +922,7 @@ func TestE2E_ApplyUpdatesFiles(t *testing.T) {
 	}
 
 	// Verify CHANGELOG
-	changelogPath := filepath.Join(dir, "workloads/jarvis/CHANGELOG.md")
+	changelogPath := filepath.Join(dir, "workloads/beacon/CHANGELOG.md")
 	changelogContent, err := os.ReadFile(changelogPath)
 	if err != nil {
 		t.Fatalf("failed to read CHANGELOG: %v", err)
@@ -946,13 +946,13 @@ func TestE2E_ApplyUpdatesFiles(t *testing.T) {
 		t.Fatalf("failed to parse manifest: %v", err)
 	}
 
-	if manifest["workloads/jarvis"] != "0.1.1" {
-		t.Errorf("manifest not updated: jarvis = %s", manifest["workloads/jarvis"])
+	if manifest["workloads/beacon"] != "0.1.1" {
+		t.Errorf("manifest not updated: beacon = %s", manifest["workloads/beacon"])
 	}
 
 	// Other packages should remain 0.1.0
-	if manifest["workloads/jarvis/clients/web"] != "0.1.0" {
-		t.Errorf("jarvis-web should be unchanged: %s", manifest["workloads/jarvis/clients/web"])
+	if manifest["workloads/beacon/clients/web"] != "0.1.0" {
+		t.Errorf("beacon-web should be unchanged: %s", manifest["workloads/beacon/clients/web"])
 	}
 }
 
@@ -961,9 +961,9 @@ func TestE2E_DryRunNoChanges(t *testing.T) {
 	dir := cloneMockRepo(t)
 
 	// Read original files
-	origVersion, _ := os.ReadFile(filepath.Join(dir, "workloads/jarvis/VERSION"))
+	origVersion, _ := os.ReadFile(filepath.Join(dir, "workloads/beacon/VERSION"))
 	origManifest, _ := os.ReadFile(filepath.Join(dir, "release-please-manifest.json"))
-	origChangelog, _ := os.ReadFile(filepath.Join(dir, "workloads/jarvis/CHANGELOG.md"))
+	origChangelog, _ := os.ReadFile(filepath.Join(dir, "workloads/beacon/CHANGELOG.md"))
 
 	// Merge feature
 	runCmd(t, dir, "git", "merge", "--no-ff", "origin/feature/single-feat", "-m", "Merge feature/single-feat")
@@ -985,7 +985,7 @@ func TestE2E_DryRunNoChanges(t *testing.T) {
 	}
 
 	// Verify files unchanged
-	newVersion, _ := os.ReadFile(filepath.Join(dir, "workloads/jarvis/VERSION"))
+	newVersion, _ := os.ReadFile(filepath.Join(dir, "workloads/beacon/VERSION"))
 	if string(newVersion) != string(origVersion) {
 		t.Error("dry run modified VERSION")
 	}
@@ -995,7 +995,7 @@ func TestE2E_DryRunNoChanges(t *testing.T) {
 		t.Error("dry run modified manifest")
 	}
 
-	newChangelog, _ := os.ReadFile(filepath.Join(dir, "workloads/jarvis/CHANGELOG.md"))
+	newChangelog, _ := os.ReadFile(filepath.Join(dir, "workloads/beacon/CHANGELOG.md"))
 	if string(newChangelog) != string(origChangelog) {
 		t.Error("dry run modified CHANGELOG")
 	}
@@ -1029,22 +1029,22 @@ func TestE2E_ConfigParsing(t *testing.T) {
 		t.Errorf("expected 1 linked group, got %d", len(result.Config.LinkedGroups))
 	}
 
-	// Verify linked group contains ma-observe
-	if components, ok := result.Config.LinkedGroups["ma-observe"]; ok {
+	// Verify linked group contains comet
+	if components, ok := result.Config.LinkedGroups["comet"]; ok {
 		if len(components) != 2 {
 			t.Errorf("expected 2 components in linked group, got %d", len(components))
 		}
 	} else {
-		t.Error("missing linked group 'ma-observe'")
+		t.Error("missing linked group 'comet'")
 	}
 
 	// Verify nested package paths
 	expectedPaths := map[string]string{
-		"jarvis":                    "workloads/jarvis",
-		"jarvis-web":                "workloads/jarvis/clients/web",
-		"jarvis-discord":            "workloads/jarvis/clients/discord",
-		"ma-observe-client":         "workloads/ma-observe/client",
-		"ma-observe-server":         "workloads/ma-observe/server",
+		"beacon":                    "workloads/beacon",
+		"beacon-web":                "workloads/beacon/clients/web",
+		"beacon-discord":            "workloads/beacon/clients/discord",
+		"comet-client":              "workloads/comet/client",
+		"comet-server":              "workloads/comet/server",
 		"sandbox-portal":            "platforms/sandbox/portal",
 		"sandbox-image-claude-code": "platforms/sandbox/images/claude-code",
 		"infrastructure":            "infrastructure/terraform",

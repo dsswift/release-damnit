@@ -91,13 +91,13 @@ Analyzing merge commit abc1234...
 Merge range: def5678..ghi9012 (5 commits)
 
 Package analysis:
-  jarvis         → minor (feat) [2 commits]
-  jarvis-web     → patch (fix)  [1 commit]
+  beacon         → minor (feat) [2 commits]
+  beacon-web     → patch (fix)  [1 commit]
   sandbox-portal → patch (fix)  [1 commit]
 
 Updating:
-  workloads/jarvis/VERSION: 0.1.119 → 0.2.0
-  workloads/jarvis/clients/web/VERSION: 0.1.10 → 0.1.11
+  workloads/beacon/VERSION: 0.1.119 → 0.2.0
+  workloads/beacon/clients/web/VERSION: 0.1.10 → 0.1.11
   platforms/sandbox/portal/VERSION: 0.1.46 → 0.1.47
 ```
 
@@ -236,12 +236,12 @@ release-damnit uses your existing Release Please configuration files unchanged:
   "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
   "scopes": ["repo", "docs", "ci", "deps"],
   "packages": {
-    "workloads/jarvis": {
-      "component": "jarvis",
+    "workloads/beacon": {
+      "component": "beacon",
       "changelog-path": "CHANGELOG.md"
     },
-    "workloads/jarvis/clients/web": {
-      "component": "jarvis-web",
+    "workloads/beacon/clients/web": {
+      "component": "beacon-web",
       "changelog-path": "CHANGELOG.md",
       "extra-files": [
         {"type": "json", "path": "package.json", "jsonpath": "$.version"}
@@ -251,8 +251,8 @@ release-damnit uses your existing Release Please configuration files unchanged:
   "plugins": [
     {
       "type": "linked-versions",
-      "groupName": "ma-observe",
-      "components": ["ma-observe-client", "ma-observe-server"]
+      "groupName": "comet",
+      "components": ["comet-client", "comet-server"]
     }
   ]
 }
@@ -264,7 +264,7 @@ release-damnit uses your existing Release Please configuration files unchanged:
 | `component` | package | The package name in tags, releases, and commit scopes. |
 | `commit-scope` | package | The commit scope when it should differ from `component`, e.g. component `sdk/go` committed as `sdk`. |
 | `changelog-path` | package | Changelog path relative to the package (default `CHANGELOG.md`). |
-| `tag-separator` | top or package | Between component and version in the tag (default `-`, so `jarvis-v1.2.3`). |
+| `tag-separator` | top or package | Between component and version in the tag (default `-`, so `beacon-v1.2.3`). |
 | `include-component-in-tag` | top or package | `false` makes tags bare: `v1.2.3`. Default `true`. The package value wins. |
 | `extra-files` | package | More files that carry the version. See below. |
 | `plugins` | top | `linked-versions` bumps a group of components together. |
@@ -316,8 +316,8 @@ A package's `VERSION` is written when it already exists or when the package has 
 
 ```json
 {
-  "workloads/jarvis": "0.1.119",
-  "workloads/jarvis/clients/web": "0.1.10"
+  "workloads/beacon": "0.1.119",
+  "workloads/beacon/clients/web": "0.1.10"
 }
 ```
 
@@ -416,8 +416,8 @@ jobs:
   release:
     runs-on: ubuntu-latest
     outputs:
-      jarvis--release_created: ${{ steps.release.outputs.jarvis--release_created }}
-      jarvis--version: ${{ steps.release.outputs.jarvis--version }}
+      beacon--release_created: ${{ steps.release.outputs.beacon--release_created }}
+      beacon--version: ${{ steps.release.outputs.beacon--version }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -428,12 +428,12 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 
-  build-jarvis:
+  build-beacon:
     needs: release
-    if: needs.release.outputs.jarvis--release_created == 'true'
+    if: needs.release.outputs.beacon--release_created == 'true'
     runs-on: ubuntu-latest
     steps:
-      - run: echo "Building jarvis ${{ needs.release.outputs.jarvis--version }}"
+      - run: echo "Building beacon ${{ needs.release.outputs.beacon--version }}"
 ```
 
 ## How It Works

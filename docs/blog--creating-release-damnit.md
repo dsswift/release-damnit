@@ -32,7 +32,7 @@ This is [issue #1533](https://github.com/googleapis/release-please/issues/1533).
 
 The obvious workaround: squash your feature branches so each merge becomes one commit.
 
-Problem: We have a monorepo. A feature might touch `jarvis`, `jarvis-web`, and `sandbox-portal`. Squashing makes it one commit with one scope. But Release Please uses commit scope to determine which packages to bump. One scope = one package bump. The others get missed.
+Problem: We have a monorepo. A feature might touch `beacon`, `beacon-web`, and `sandbox-portal`. Squashing makes it one commit with one scope. But Release Please uses commit scope to determine which packages to bump. One scope = one package bump. The others get missed.
 
 ### Attempt 2: "Just rebase"
 
@@ -146,11 +146,11 @@ var conventionalCommitRegex = regexp.MustCompile(
 )
 ```
 
-**The config package taught me about deepest-match-wins.** With nested packages like `workloads/jarvis` and `workloads/jarvis/clients/web`, a file at `workloads/jarvis/clients/web/src/App.tsx` should match `jarvis-web`, not `jarvis`. The solution: iterate all packages, track the longest matching path prefix.
+**The config package taught me about deepest-match-wins.** With nested packages like `workloads/beacon` and `workloads/beacon/clients/web`, a file at `workloads/beacon/clients/web/src/App.tsx` should match `beacon-web`, not `beacon`. The solution: iterate all packages, track the longest matching path prefix.
 
 **The version package handles pre-1.0 packages specially.** By default, `feat` triggers minor bump (0.1.0 → 0.2.0). But many teams want pre-1.0 versions to stay pre-1.0 longer, treating `feat` as patch (0.1.0 → 0.1.1). The `TreatPreMajorAsMinor` flag controls this.
 
-**Edge case: linked versions.** Some packages should always have the same version (like `ma-observe-client` and `ma-observe-server`). The config tracks these groups, and when calculating bumps, we find the highest bump across all linked packages and apply it to all of them.
+**Edge case: linked versions.** Some packages should always have the same version (like `comet-client` and `comet-server`). The config tracks these groups, and when calculating bumps, we find the highest bump across all linked packages and apply it to all of them.
 
 ### Phase 4: CLI Integration & Testing
 
@@ -232,35 +232,35 @@ Building from source in CI means no binary distribution headaches (which archite
 
 ### Phase 5.5: Comprehensive E2E Testing
 
-**The mock repo grew to mirror sh-monorepo.** The initial mock repo was simple - 4 services with basic linking. But to validate release-damnit for production use, it needed to test the same scenarios we'd face:
+**The mock repo grew to mirror the production monorepo.** The initial mock repo was simple - 4 services with basic linking. But to validate release-damnit for production use, it needed to test the same scenarios we'd face:
 
-- **Nested packages**: `jarvis/clients/web` should match `jarvis-web`, not `jarvis` (deepest match wins)
-- **Linked versions**: Change to `ma-observe-client` should bump `ma-observe-server` too
+- **Nested packages**: `beacon/clients/web` should match `beacon-web`, not `beacon` (deepest match wins)
+- **Linked versions**: Change to `comet-client` should bump `comet-server` too
 - **Breaking changes**: `feat!` should trigger major bumps
 - **Stacked commits**: Multiple commits of varying severity (chore, fix, feat) should pick the highest (feat wins)
-- **Multi-package changes**: A feature touching jarvis, sandbox-portal, and infrastructure should bump all three independently
+- **Multi-package changes**: A feature touching beacon, sandbox-portal, and infrastructure should bump all three independently
 
 **The setup script became a full simulation.** `scripts/setup-mock-repo.sh` now creates:
-- 8 packages matching sh-monorepo structure
+- 8 packages matching a production monorepo
 - 6 feature branches, each testing a specific scenario
 - A `.github/workflows/release-damnit.yml` with conditional build jobs
 
 **Six scenario tests validate behavior without touching GitHub:**
 
 ```go
-TestE2E_Scenario_SingleFeat       // jarvis 0.1.0 → 0.1.1
+TestE2E_Scenario_SingleFeat       // beacon 0.1.0 → 0.1.1
 TestE2E_Scenario_MultiPackage     // 3 packages bumped independently
 TestE2E_Scenario_BreakingChange   // sandbox-portal 0.1.0 → 1.0.0
 TestE2E_Scenario_LinkedVersions   // client+server both bump
 TestE2E_Scenario_StackedCommits   // feat wins over fix and chore
-TestE2E_Scenario_NestedPackage    // jarvis-web, not jarvis
+TestE2E_Scenario_NestedPackage    // beacon-web, not beacon
 ```
 
 **Three full GitHub tests create real releases:**
 
 ```go
-TestE2E_FullGitHubReleaseFlow_SingleFeat      // Creates jarvis-v0.1.1
-TestE2E_FullGitHubReleaseFlow_LinkedVersions  // Creates ma-observe-client-v0.1.1 + server
+TestE2E_FullGitHubReleaseFlow_SingleFeat      // Creates beacon-v0.1.1
+TestE2E_FullGitHubReleaseFlow_LinkedVersions  // Creates comet-client-v0.1.1 + server
 TestE2E_FullGitHubReleaseFlow_MultiPackage    // Creates 3 releases
 ```
 
@@ -268,7 +268,7 @@ Each test creates a timestamped branch, pushes to origin, creates releases, veri
 
 **All 12 E2E tests pass consistently.** The test suite takes about 50 seconds - mostly network time for GitHub operations. Fast enough to run on every commit, comprehensive enough to catch real bugs.
 
-### Phase 6: sh-monorepo Integration
+### Phase 6: Production Monorepo Integration
 
 **Documentation first, migration second.** Before switching the production workflow, I created:
 - `docs/standards/gitops.md` - The new simplified workflow documentation
@@ -286,7 +286,7 @@ Each test creates a timestamped branch, pushes to origin, creates releases, veri
 3. Creates GitHub releases
 4. Outputs which packages were released
 
-The downstream build jobs check these outputs (`jarvis--release_created`, etc.) to decide whether to build.
+The downstream build jobs check these outputs (`beacon--release_created`, etc.) to decide whether to build.
 
 ### Phase 7: Release
 

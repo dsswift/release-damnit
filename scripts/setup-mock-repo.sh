@@ -6,10 +6,10 @@
 #   ./scripts/setup-mock-repo.sh              # Full setup (creates repo structure)
 #   ./scripts/setup-mock-repo.sh --local      # Local mode (creates in /tmp, no GitHub)
 #
-# The repository structure mirrors sh-monorepo with:
-# - Nested workloads (jarvis, jarvis/clients/web, etc.)
+# The repository structure mirrors the production monorepo with:
+# - Nested workloads (beacon, beacon/clients/web, etc.)
 # - Platform packages (sandbox, infrastructure)
-# - Linked versions (ma-observe-client and ma-observe-server)
+# - Linked versions (comet-client and comet-server)
 # - release-please-config.json and manifest
 # - .github/workflows/release-damnit.yml (actual CI pipeline)
 #
@@ -19,7 +19,7 @@
 # - feature/breaking-change: Breaking change (major bump)
 # - feature/linked-versions: Change to linked package
 # - feature/stacked-commits: Multiple commits of varying severity
-# - feature/nested-package: Change to nested package (jarvis-web inside jarvis)
+# - feature/nested-package: Change to nested package (beacon-web inside beacon)
 
 set -euo pipefail
 
@@ -72,15 +72,15 @@ else
 fi
 
 # =============================================================================
-# Directory Structure (mirrors sh-monorepo)
+# Directory Structure (mirrors the production monorepo)
 # =============================================================================
 
 # Workloads
-mkdir -p workloads/jarvis/backend/src
-mkdir -p workloads/jarvis/clients/web/src
-mkdir -p workloads/jarvis/clients/discord/src
-mkdir -p workloads/ma-observe/client/src
-mkdir -p workloads/ma-observe/server/src
+mkdir -p workloads/beacon/backend/src
+mkdir -p workloads/beacon/clients/web/src
+mkdir -p workloads/beacon/clients/discord/src
+mkdir -p workloads/comet/client/src
+mkdir -p workloads/comet/server/src
 
 # Platforms
 mkdir -p platforms/sandbox/portal/src
@@ -97,11 +97,11 @@ mkdir -p .github/workflows
 # =============================================================================
 
 for dir in \
-    workloads/jarvis \
-    workloads/jarvis/clients/web \
-    workloads/jarvis/clients/discord \
-    workloads/ma-observe/client \
-    workloads/ma-observe/server \
+    workloads/beacon \
+    workloads/beacon/clients/web \
+    workloads/beacon/clients/discord \
+    workloads/comet/client \
+    workloads/comet/server \
     platforms/sandbox/portal \
     platforms/sandbox/images/claude-code \
     infrastructure/terraform
@@ -114,11 +114,11 @@ done
 # =============================================================================
 
 for dir in \
-    workloads/jarvis \
-    workloads/jarvis/clients/web \
-    workloads/jarvis/clients/discord \
-    workloads/ma-observe/client \
-    workloads/ma-observe/server \
+    workloads/beacon \
+    workloads/beacon/clients/web \
+    workloads/beacon/clients/discord \
+    workloads/comet/client \
+    workloads/comet/server \
     platforms/sandbox/portal \
     platforms/sandbox/images/claude-code \
     infrastructure/terraform
@@ -138,17 +138,17 @@ done
 # Source files (placeholders)
 # =============================================================================
 
-echo "// Jarvis backend service" > workloads/jarvis/backend/src/main.go
-echo "// Jarvis web client" > workloads/jarvis/clients/web/src/App.tsx
-echo "// Jarvis Discord bot" > workloads/jarvis/clients/discord/src/bot.ts
-echo "// MA-Observe client" > workloads/ma-observe/client/src/client.go
-echo "// MA-Observe server" > workloads/ma-observe/server/src/server.go
+echo "// Beacon backend service" > workloads/beacon/backend/src/main.go
+echo "// Beacon web client" > workloads/beacon/clients/web/src/App.tsx
+echo "// Beacon Discord bot" > workloads/beacon/clients/discord/src/bot.ts
+echo "// MA-Observe client" > workloads/comet/client/src/client.go
+echo "// MA-Observe server" > workloads/comet/server/src/server.go
 echo "// Sandbox portal" > platforms/sandbox/portal/src/main.py
 echo "FROM ubuntu:22.04" > platforms/sandbox/images/claude-code/Dockerfile
 echo "# Terraform modules" > infrastructure/terraform/modules/README.md
 
 # =============================================================================
-# release-please-config.json (mirrors sh-monorepo structure)
+# release-please-config.json (mirrors the structure of a production monorepo)
 # =============================================================================
 
 cat > release-please-config.json << 'CONFIG_EOF'
@@ -160,28 +160,28 @@ cat > release-please-config.json << 'CONFIG_EOF'
   "include-component-in-tag": true,
   "tag-separator": "-",
   "packages": {
-    "workloads/jarvis": {
-      "component": "jarvis",
+    "workloads/beacon": {
+      "component": "beacon",
       "changelog-path": "CHANGELOG.md",
       "extra-files": [{"type": "generic", "path": "VERSION"}]
     },
-    "workloads/jarvis/clients/web": {
-      "component": "jarvis-web",
+    "workloads/beacon/clients/web": {
+      "component": "beacon-web",
       "changelog-path": "CHANGELOG.md",
       "extra-files": [{"type": "generic", "path": "VERSION"}]
     },
-    "workloads/jarvis/clients/discord": {
-      "component": "jarvis-discord",
+    "workloads/beacon/clients/discord": {
+      "component": "beacon-discord",
       "changelog-path": "CHANGELOG.md",
       "extra-files": [{"type": "generic", "path": "VERSION"}]
     },
-    "workloads/ma-observe/client": {
-      "component": "ma-observe-client",
+    "workloads/comet/client": {
+      "component": "comet-client",
       "changelog-path": "CHANGELOG.md",
       "extra-files": [{"type": "generic", "path": "VERSION"}]
     },
-    "workloads/ma-observe/server": {
-      "component": "ma-observe-server",
+    "workloads/comet/server": {
+      "component": "comet-server",
       "changelog-path": "CHANGELOG.md",
       "extra-files": [{"type": "generic", "path": "VERSION"}]
     },
@@ -204,8 +204,8 @@ cat > release-please-config.json << 'CONFIG_EOF'
   "plugins": [
     {
       "type": "linked-versions",
-      "groupName": "ma-observe",
-      "components": ["ma-observe-client", "ma-observe-server"]
+      "groupName": "comet",
+      "components": ["comet-client", "comet-server"]
     }
   ]
 }
@@ -217,11 +217,11 @@ CONFIG_EOF
 
 cat > release-please-manifest.json << 'MANIFEST_EOF'
 {
-  "workloads/jarvis": "0.1.0",
-  "workloads/jarvis/clients/web": "0.1.0",
-  "workloads/jarvis/clients/discord": "0.1.0",
-  "workloads/ma-observe/client": "0.1.0",
-  "workloads/ma-observe/server": "0.1.0",
+  "workloads/beacon": "0.1.0",
+  "workloads/beacon/clients/web": "0.1.0",
+  "workloads/beacon/clients/discord": "0.1.0",
+  "workloads/comet/client": "0.1.0",
+  "workloads/comet/server": "0.1.0",
   "platforms/sandbox/portal": "0.1.0",
   "platforms/sandbox/images/claude-code": "0.1.0",
   "infrastructure/terraform": "0.1.0"
@@ -254,11 +254,11 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       releases_created: ${{ steps.release.outputs.releases_created }}
-      jarvis_release_created: ${{ steps.release.outputs.jarvis_release_created }}
-      jarvis_web_release_created: ${{ steps.release.outputs.jarvis-web_release_created }}
-      jarvis_discord_release_created: ${{ steps.release.outputs.jarvis-discord_release_created }}
-      ma_observe_client_release_created: ${{ steps.release.outputs.ma-observe-client_release_created }}
-      ma_observe_server_release_created: ${{ steps.release.outputs.ma-observe-server_release_created }}
+      beacon_release_created: ${{ steps.release.outputs.beacon_release_created }}
+      beacon_web_release_created: ${{ steps.release.outputs.beacon-web_release_created }}
+      beacon_discord_release_created: ${{ steps.release.outputs.beacon-discord_release_created }}
+      ma_observe_client_release_created: ${{ steps.release.outputs.comet-client_release_created }}
+      ma_observe_server_release_created: ${{ steps.release.outputs.comet-server_release_created }}
       sandbox_portal_release_created: ${{ steps.release.outputs.sandbox-portal_release_created }}
       sandbox_image_claude_code_release_created: ${{ steps.release.outputs.sandbox-image-claude-code_release_created }}
       infrastructure_release_created: ${{ steps.release.outputs.infrastructure_release_created }}
@@ -279,36 +279,36 @@ jobs:
         run: |
           echo "Releases created: ${{ steps.release.outputs.releases_created }}"
           echo "---"
-          echo "jarvis: ${{ steps.release.outputs.jarvis_release_created }}"
-          echo "jarvis-web: ${{ steps.release.outputs.jarvis-web_release_created }}"
-          echo "jarvis-discord: ${{ steps.release.outputs.jarvis-discord_release_created }}"
-          echo "ma-observe-client: ${{ steps.release.outputs.ma-observe-client_release_created }}"
-          echo "ma-observe-server: ${{ steps.release.outputs.ma-observe-server_release_created }}"
+          echo "beacon: ${{ steps.release.outputs.beacon_release_created }}"
+          echo "beacon-web: ${{ steps.release.outputs.beacon-web_release_created }}"
+          echo "beacon-discord: ${{ steps.release.outputs.beacon-discord_release_created }}"
+          echo "comet-client: ${{ steps.release.outputs.comet-client_release_created }}"
+          echo "comet-server: ${{ steps.release.outputs.comet-server_release_created }}"
           echo "sandbox-portal: ${{ steps.release.outputs.sandbox-portal_release_created }}"
           echo "sandbox-image-claude-code: ${{ steps.release.outputs.sandbox-image-claude-code_release_created }}"
           echo "infrastructure: ${{ steps.release.outputs.infrastructure_release_created }}"
 
-  # Example downstream build jobs (would be real builds in sh-monorepo)
-  build-jarvis:
+  # Example downstream build jobs (would be real builds in the production monorepo)
+  build-beacon:
     needs: release
-    if: needs.release.outputs.jarvis_release_created == 'true'
+    if: needs.release.outputs.beacon_release_created == 'true'
     runs-on: ubuntu-latest
     steps:
-      - run: echo "Building jarvis..."
+      - run: echo "Building beacon..."
 
-  build-jarvis-web:
+  build-beacon-web:
     needs: release
-    if: needs.release.outputs.jarvis_web_release_created == 'true'
+    if: needs.release.outputs.beacon_web_release_created == 'true'
     runs-on: ubuntu-latest
     steps:
-      - run: echo "Building jarvis-web..."
+      - run: echo "Building beacon-web..."
 
-  build-ma-observe:
+  build-comet:
     needs: release
     if: needs.release.outputs.ma_observe_client_release_created == 'true' || needs.release.outputs.ma_observe_server_release_created == 'true'
     runs-on: ubuntu-latest
     steps:
-      - run: echo "Building ma-observe (client and/or server)..."
+      - run: echo "Building comet (client and/or server)..."
 WORKFLOW_EOF
 
 # =============================================================================
@@ -326,13 +326,13 @@ This repository is periodically reset by the release-damnit test suite.
 
 ```
 workloads/
-├── jarvis/                    # jarvis (backend)
+├── beacon/                    # beacon (backend)
 │   └── clients/
-│       ├── web/               # jarvis-web (nested under jarvis)
-│       └── discord/           # jarvis-discord (nested under jarvis)
-└── ma-observe/
-    ├── client/                # ma-observe-client (linked with server)
-    └── server/                # ma-observe-server (linked with client)
+│       ├── web/               # beacon-web (nested under beacon)
+│       └── discord/           # beacon-discord (nested under beacon)
+└── comet/
+    ├── client/                # comet-client (linked with server)
+    └── server/                # comet-server (linked with client)
 platforms/
 └── sandbox/
     ├── portal/                # sandbox-portal
@@ -346,11 +346,11 @@ infrastructure/
 
 | Package | Behavior |
 |---------|----------|
-| jarvis | Standalone - changes to jarvis/ (but not clients/) |
-| jarvis-web | Nested - changes to jarvis/clients/web/ |
-| jarvis-discord | Nested - changes to jarvis/clients/discord/ |
-| ma-observe-client | Linked - bumps together with ma-observe-server |
-| ma-observe-server | Linked - bumps together with ma-observe-client |
+| beacon | Standalone - changes to beacon/ (but not clients/) |
+| beacon-web | Nested - changes to beacon/clients/web/ |
+| beacon-discord | Nested - changes to beacon/clients/discord/ |
+| comet-client | Linked - bumps together with comet-server |
+| comet-server | Linked - bumps together with comet-client |
 | sandbox-portal | Standalone |
 | sandbox-image-claude-code | Standalone |
 | infrastructure | Standalone |
@@ -361,12 +361,12 @@ These branches test different release scenarios:
 
 | Branch | Scenario |
 |--------|----------|
-| feature/single-feat | One feat commit to jarvis |
-| feature/multi-package | Commits to jarvis, sandbox-portal, infrastructure |
+| feature/single-feat | One feat commit to beacon |
+| feature/multi-package | Commits to beacon, sandbox-portal, infrastructure |
 | feature/breaking-change | feat!: breaking change (major bump) |
-| feature/linked-versions | Change to ma-observe-client (triggers both) |
+| feature/linked-versions | Change to comet-client (triggers both) |
 | feature/stacked-commits | Multiple commits with different severities |
-| feature/nested-package | Change to jarvis-web (nested inside jarvis) |
+| feature/nested-package | Change to beacon-web (nested inside beacon) |
 README_EOF
 
 # =============================================================================
@@ -385,27 +385,27 @@ git checkout main
 
 # =============================================================================
 # Feature branch: single-feat
-# One feat commit to jarvis
+# One feat commit to beacon
 # =============================================================================
 
 git checkout -b feature/single-feat
 
-echo "// New calendar integration" >> workloads/jarvis/backend/src/main.go
-git add workloads/jarvis/backend/src/main.go
-git commit -m "feat(jarvis): add calendar integration"
+echo "// New calendar integration" >> workloads/beacon/backend/src/main.go
+git add workloads/beacon/backend/src/main.go
+git commit -m "feat(beacon): add calendar integration"
 
 git checkout main
 
 # =============================================================================
 # Feature branch: multi-package
-# Commits touching jarvis, sandbox-portal, and infrastructure
+# Commits touching beacon, sandbox-portal, and infrastructure
 # =============================================================================
 
 git checkout -b feature/multi-package
 
-echo "// Recipe improvements" >> workloads/jarvis/backend/src/main.go
-git add workloads/jarvis/backend/src/main.go
-git commit -m "feat(jarvis): improve recipe search"
+echo "// Recipe improvements" >> workloads/beacon/backend/src/main.go
+git add workloads/beacon/backend/src/main.go
+git commit -m "feat(beacon): improve recipe search"
 
 echo "// Dashboard redesign" >> platforms/sandbox/portal/src/main.py
 git add platforms/sandbox/portal/src/main.py
@@ -432,14 +432,14 @@ git checkout main
 
 # =============================================================================
 # Feature branch: linked-versions
-# Change to ma-observe-client (should bump both client and server)
+# Change to comet-client (should bump both client and server)
 # =============================================================================
 
 git checkout -b feature/linked-versions
 
-echo "// New metrics collector" >> workloads/ma-observe/client/src/client.go
-git add workloads/ma-observe/client/src/client.go
-git commit -m "feat(ma-observe-client): add metrics collector"
+echo "// New metrics collector" >> workloads/comet/client/src/client.go
+git add workloads/comet/client/src/client.go
+git commit -m "feat(comet-client): add metrics collector"
 
 git checkout main
 
@@ -451,53 +451,53 @@ git checkout main
 
 git checkout -b feature/stacked-commits
 
-echo "// Chore: cleanup" >> workloads/jarvis/clients/discord/src/bot.ts
-git add workloads/jarvis/clients/discord/src/bot.ts
-git commit -m "chore(jarvis-discord): cleanup old code"
+echo "// Chore: cleanup" >> workloads/beacon/clients/discord/src/bot.ts
+git add workloads/beacon/clients/discord/src/bot.ts
+git commit -m "chore(beacon-discord): cleanup old code"
 
-echo "// Fix: handle rate limits" >> workloads/jarvis/clients/discord/src/bot.ts
-git add workloads/jarvis/clients/discord/src/bot.ts
-git commit -m "fix(jarvis-discord): handle rate limits properly"
+echo "// Fix: handle rate limits" >> workloads/beacon/clients/discord/src/bot.ts
+git add workloads/beacon/clients/discord/src/bot.ts
+git commit -m "fix(beacon-discord): handle rate limits properly"
 
-echo "// Feature: slash commands" >> workloads/jarvis/clients/discord/src/bot.ts
-git add workloads/jarvis/clients/discord/src/bot.ts
-git commit -m "feat(jarvis-discord): add slash commands support"
+echo "// Feature: slash commands" >> workloads/beacon/clients/discord/src/bot.ts
+git add workloads/beacon/clients/discord/src/bot.ts
+git commit -m "feat(beacon-discord): add slash commands support"
 
-echo "// Another fix" >> workloads/jarvis/clients/discord/src/bot.ts
-git add workloads/jarvis/clients/discord/src/bot.ts
-git commit -m "fix(jarvis-discord): fix command parsing"
+echo "// Another fix" >> workloads/beacon/clients/discord/src/bot.ts
+git add workloads/beacon/clients/discord/src/bot.ts
+git commit -m "fix(beacon-discord): fix command parsing"
 
 git checkout main
 
 # =============================================================================
 # Feature branch: nested-package
-# Change to jarvis-web (nested inside jarvis)
-# Should only bump jarvis-web, not jarvis (deepest match wins)
+# Change to beacon-web (nested inside beacon)
+# Should only bump beacon-web, not beacon (deepest match wins)
 # =============================================================================
 
 git checkout -b feature/nested-package
 
-echo "// New React component" >> workloads/jarvis/clients/web/src/App.tsx
-git add workloads/jarvis/clients/web/src/App.tsx
-git commit -m "feat(jarvis-web): add notification component"
+echo "// New React component" >> workloads/beacon/clients/web/src/App.tsx
+git add workloads/beacon/clients/web/src/App.tsx
+git commit -m "feat(beacon-web): add notification component"
 
 git checkout main
 
 # =============================================================================
 # Feature branch: complex-merge (the "kitchen sink" test)
 # Tests ALL package types in a single merge:
-# - Simple scopes: jarvis, sandbox-portal, infrastructure, sandbox-image-claude-code
-# - Linked scopes: ma-observe-client (triggers ma-observe-server)
-# - Nested scopes: jarvis-web, jarvis-discord (both nested inside jarvis)
+# - Simple scopes: beacon, sandbox-portal, infrastructure, sandbox-image-claude-code
+# - Linked scopes: comet-client (triggers comet-server)
+# - Nested scopes: beacon-web, beacon-discord (both nested inside beacon)
 # - Multiple commit types: feat, fix, chore, feat! (breaking)
 # - Stacked commits: Multiple commits to same package
 #
 # Expected results (8 packages total):
-# - jarvis: 0.1.0 → 0.1.1 (feat)
-# - jarvis-web: 0.1.0 → 0.1.1 (feat wins over fix)
-# - jarvis-discord: 0.1.0 → 0.1.1 (fix)
-# - ma-observe-client: 0.1.0 → 0.1.1 (feat)
-# - ma-observe-server: 0.1.0 → 0.1.1 (linked, no direct commits)
+# - beacon: 0.1.0 → 0.1.1 (feat)
+# - beacon-web: 0.1.0 → 0.1.1 (feat wins over fix)
+# - beacon-discord: 0.1.0 → 0.1.1 (fix)
+# - comet-client: 0.1.0 → 0.1.1 (feat)
+# - comet-server: 0.1.0 → 0.1.1 (linked, no direct commits)
 # - sandbox-portal: 0.1.0 → 1.0.0 (feat! breaking)
 # - sandbox-image-claude-code: 0.1.0 → 0.1.1 (feat)
 # - infrastructure: 0.1.0 → 0.1.1 (fix)
@@ -505,41 +505,41 @@ git checkout main
 
 git checkout -b feature/complex-merge
 
-# --- jarvis (simple scope, multiple commits) ---
-echo "// Add recipe feature" >> workloads/jarvis/backend/src/main.go
-git add workloads/jarvis/backend/src/main.go
-git commit -m "feat(jarvis): add recipe recommendation engine"
+# --- beacon (simple scope, multiple commits) ---
+echo "// Add recipe feature" >> workloads/beacon/backend/src/main.go
+git add workloads/beacon/backend/src/main.go
+git commit -m "feat(beacon): add recipe recommendation engine"
 
-echo "// Fix recipe bug" >> workloads/jarvis/backend/src/main.go
-git add workloads/jarvis/backend/src/main.go
-git commit -m "fix(jarvis): handle missing ingredients gracefully"
+echo "// Fix recipe bug" >> workloads/beacon/backend/src/main.go
+git add workloads/beacon/backend/src/main.go
+git commit -m "fix(beacon): handle missing ingredients gracefully"
 
-# --- jarvis-web (nested scope, stacked commits - feat wins) ---
-echo "// Fix button styling" >> workloads/jarvis/clients/web/src/App.tsx
-git add workloads/jarvis/clients/web/src/App.tsx
-git commit -m "fix(jarvis-web): fix button alignment on mobile"
+# --- beacon-web (nested scope, stacked commits - feat wins) ---
+echo "// Fix button styling" >> workloads/beacon/clients/web/src/App.tsx
+git add workloads/beacon/clients/web/src/App.tsx
+git commit -m "fix(beacon-web): fix button alignment on mobile"
 
-echo "// Add dark mode" >> workloads/jarvis/clients/web/src/App.tsx
-git add workloads/jarvis/clients/web/src/App.tsx
-git commit -m "feat(jarvis-web): add dark mode support"
+echo "// Add dark mode" >> workloads/beacon/clients/web/src/App.tsx
+git add workloads/beacon/clients/web/src/App.tsx
+git commit -m "feat(beacon-web): add dark mode support"
 
-echo "// Cleanup imports" >> workloads/jarvis/clients/web/src/App.tsx
-git add workloads/jarvis/clients/web/src/App.tsx
-git commit -m "chore(jarvis-web): cleanup unused imports"
+echo "// Cleanup imports" >> workloads/beacon/clients/web/src/App.tsx
+git add workloads/beacon/clients/web/src/App.tsx
+git commit -m "chore(beacon-web): cleanup unused imports"
 
-# --- jarvis-discord (nested scope, single fix) ---
-echo "// Handle rate limit" >> workloads/jarvis/clients/discord/src/bot.ts
-git add workloads/jarvis/clients/discord/src/bot.ts
-git commit -m "fix(jarvis-discord): handle Discord API rate limits"
+# --- beacon-discord (nested scope, single fix) ---
+echo "// Handle rate limit" >> workloads/beacon/clients/discord/src/bot.ts
+git add workloads/beacon/clients/discord/src/bot.ts
+git commit -m "fix(beacon-discord): handle Discord API rate limits"
 
-# --- ma-observe-client (linked scope - should trigger server bump too) ---
-echo "// Add new metric type" >> workloads/ma-observe/client/src/client.go
-git add workloads/ma-observe/client/src/client.go
-git commit -m "feat(ma-observe-client): add CPU temperature metric"
+# --- comet-client (linked scope - should trigger server bump too) ---
+echo "// Add new metric type" >> workloads/comet/client/src/client.go
+git add workloads/comet/client/src/client.go
+git commit -m "feat(comet-client): add CPU temperature metric"
 
-echo "// Fix metric parsing" >> workloads/ma-observe/client/src/client.go
-git add workloads/ma-observe/client/src/client.go
-git commit -m "fix(ma-observe-client): fix metric timestamp parsing"
+echo "// Fix metric parsing" >> workloads/comet/client/src/client.go
+git add workloads/comet/client/src/client.go
+git commit -m "fix(comet-client): fix metric timestamp parsing"
 
 # --- sandbox-portal (breaking change - major bump) ---
 echo "// BREAKING: New API v2" >> platforms/sandbox/portal/src/main.py
@@ -593,25 +593,25 @@ echo ""
 echo "Initial commit: $INITIAL_SHA"
 echo ""
 echo "Packages (8 total):"
-echo "  - workloads/jarvis (jarvis)"
-echo "  - workloads/jarvis/clients/web (jarvis-web) - nested"
-echo "  - workloads/jarvis/clients/discord (jarvis-discord) - nested"
-echo "  - workloads/ma-observe/client (ma-observe-client) - linked"
-echo "  - workloads/ma-observe/server (ma-observe-server) - linked"
+echo "  - workloads/beacon (beacon)"
+echo "  - workloads/beacon/clients/web (beacon-web) - nested"
+echo "  - workloads/beacon/clients/discord (beacon-discord) - nested"
+echo "  - workloads/comet/client (comet-client) - linked"
+echo "  - workloads/comet/server (comet-server) - linked"
 echo "  - platforms/sandbox/portal (sandbox-portal)"
 echo "  - platforms/sandbox/images/claude-code (sandbox-image-claude-code)"
 echo "  - infrastructure/terraform (infrastructure)"
 echo ""
 echo "Feature branches (7 scenarios):"
-echo "  - feature/single-feat: 1 commit (feat) → jarvis minor bump"
-echo "  - feature/multi-package: 3 commits → jarvis, sandbox-portal, infrastructure minor bumps"
+echo "  - feature/single-feat: 1 commit (feat) → beacon minor bump"
+echo "  - feature/multi-package: 3 commits → beacon, sandbox-portal, infrastructure minor bumps"
 echo "  - feature/breaking-change: 1 commit (feat!) → sandbox-portal MAJOR bump"
-echo "  - feature/linked-versions: 1 commit → ma-observe-client AND ma-observe-server minor bumps"
-echo "  - feature/stacked-commits: 4 commits (chore, fix, feat, fix) → jarvis-discord minor bump (feat wins)"
-echo "  - feature/nested-package: 1 commit → jarvis-web minor bump (not jarvis)"
+echo "  - feature/linked-versions: 1 commit → comet-client AND comet-server minor bumps"
+echo "  - feature/stacked-commits: 4 commits (chore, fix, feat, fix) → beacon-discord minor bump (feat wins)"
+echo "  - feature/nested-package: 1 commit → beacon-web minor bump (not beacon)"
 echo "  - feature/complex-merge: 12 commits → ALL 8 packages bumped (the \"kitchen sink\" test)"
-echo "      Simple: jarvis, sandbox-portal (MAJOR!), sandbox-image-claude-code, infrastructure"
-echo "      Linked: ma-observe-client + ma-observe-server (server has no direct commits)"
-echo "      Nested: jarvis-web (feat wins), jarvis-discord"
+echo "      Simple: beacon, sandbox-portal (MAJOR!), sandbox-image-claude-code, infrastructure"
+echo "      Linked: comet-client + comet-server (server has no direct commits)"
+echo "      Nested: beacon-web (feat wins), beacon-discord"
 echo ""
 echo "CI Pipeline: .github/workflows/release-damnit.yml"

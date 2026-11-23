@@ -2,8 +2,12 @@ package scaffold
 
 import "strings"
 
+// Release is the release-damnit release this source is. Every release commit
+// rewrites it, so a scaffold pins the release that wrote it.
+const Release = "v1.9.2" // x-release-please-version
+
 // DefaultActionRef is the release-damnit action a scaffolded workflow pins.
-const DefaultActionRef = "dsswift/release-damnit@v1.8.2"
+const DefaultActionRef = "dsswift/release-damnit@" + Release
 
 // releaseWorkflow is the standard release workflow. USES is the action reference.
 const releaseWorkflow = `name: Release
@@ -58,7 +62,7 @@ func ReleaseWorkflow(uses string) string {
 
 // DefaultReleaseDamnitVersion is the release-damnit binary a scaffolded
 // GitLab pipeline downloads.
-const DefaultReleaseDamnitVersion = "v1.5.0"
+const DefaultReleaseDamnitVersion = Release
 
 // GitLabCIPath and GitLabBuildPath are where the GitLab pipeline goes.
 const (

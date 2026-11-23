@@ -11,7 +11,8 @@
   "packages": {
     ".": {
       "component": "release-damnit",
-      "changelog-path": "CHANGELOG.md"
+      "changelog-path": "CHANGELOG.md",
+      "extra-files": ["internal/scaffold/workflow.go"]
     }
   }
 }

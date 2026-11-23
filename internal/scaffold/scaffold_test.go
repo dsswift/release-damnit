@@ -40,8 +40,10 @@ func assertGolden(t *testing.T, dir, path, golden string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if string(got) != string(want) {
-		t.Errorf("%s =\n%s\nwant (testdata/%s)\n%s", path, got, golden, want)
+	// A golden file writes the pinned release as {{release}}.
+	wantText := strings.ReplaceAll(string(want), "{{release}}", Release)
+	if string(got) != wantText {
+		t.Errorf("%s =\n%s\nwant (testdata/%s)\n%s", path, got, golden, wantText)
 	}
 }
 
@@ -205,5 +207,17 @@ func TestRun_GitLabKeepsTheRepoBuildAndRefusesAnExistingPipeline(t *testing.T) {
 func TestRun_RejectsAnUnknownForge(t *testing.T) {
 	if _, err := Run(Options{Dir: newRepo(t, "x"), Version: "1.0.0", Forge: "bitbucket"}); err == nil || !strings.Contains(err.Error(), `forge "bitbucket"`) {
 		t.Errorf("err = %v", err)
+	}
+}
+
+// Each release commit rewrites Release through extra-files; this catches a
+// release that did not.
+func TestRelease_IsThisSourcesVersion(t *testing.T) {
+	v, err := os.ReadFile(filepath.Join("..", "..", "VERSION"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := "v" + strings.Fields(string(v))[0]; Release != want {
+		t.Errorf("Release = %q, want %q from VERSION", Release, want)
 	}
 }

@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [1.9.2](https://github.com/dsswift/release-damnit/compare/v1.9.1...v1.9.2) (2026-11-23)
+
+### Bug Fixes
+
+* run a release's own binary in the action ([baf9445](https://github.com/dsswift/release-damnit/commit/baf94450db7181e2ab3dead34f28ff3b7df31b3e))
+
 ## [1.9.1](https://github.com/dsswift/release-damnit/compare/v1.9.0...v1.9.1) (2026-11-20)
 
 ### Bug Fixes

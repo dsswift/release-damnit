@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [1.10.0](https://github.com/dsswift/release-damnit/compare/v1.9.4...v1.10.0) (2026-11-25)
+
+### Features
+
+* require a work trailer where vantage.yaml asks ([718afd1](https://github.com/dsswift/release-damnit/commit/718afd14c9e44dc447d93561e9cc58408a7c6954))
+
 ## [1.9.4](https://github.com/dsswift/release-damnit/compare/v1.9.3...v1.9.4) (2026-11-23)
 
 ### Bug Fixes

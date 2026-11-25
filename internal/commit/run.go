@@ -38,6 +38,10 @@ type Options struct {
 	// DryRun shows the plan and stops.
 	DryRun bool
 
+	// Work names the items every commit is part of, as a "Work:" trailer.
+	// A repo whose vantage.yaml names a work kind requires it.
+	Work []string
+
 	// Planner writes the plan.
 	Planner Planner
 
@@ -60,6 +64,15 @@ func Run(ctx context.Context, opts Options) error {
 	rules, root, err := commitcheck.LoadRules(opts.Dir)
 	if err != nil {
 		return err
+	}
+	var trailer string
+	switch {
+	case len(opts.Work) > 0:
+		if trailer, err = rules.Work.Trailer(opts.Work); err != nil {
+			return fmt.Errorf("--work: %w", err)
+		}
+	case rules.Work.On():
+		return fmt.Errorf("this repo tracks work in %s; pass --work %s naming the item these commits are part of", commitcheck.VantageFile, rules.Work.Kind+"-15")
 	}
 	changes, err := pending(root, opts.Staged)
 	if err != nil {
@@ -89,7 +102,7 @@ func Run(ctx context.Context, opts Options) error {
 	if err != nil {
 		return err
 	}
-	in := input{rules: rules, parts: parts, diffs: diffs(root, base, opts.Staged, changes)}
+	in := input{rules: rules, parts: parts, diffs: diffs(root, base, opts.Staged, changes), trailer: trailer}
 
 	fmt.Fprintf(out, "%sasking Claude to plan %d file(s)\n", Prefix, len(changes))
 	reply, err := plan(ctx, opts.Planner, in)
@@ -116,7 +129,7 @@ func Run(ctx context.Context, opts Options) error {
 		for _, f := range pc.Files {
 			paths = append(paths, byPath[f].Paths()...)
 		}
-		if err := createCommit(root, opts.Staged, hasHead, strings.TrimSpace(pc.Message), paths, out); err != nil {
+		if err := createCommit(root, opts.Staged, hasHead, strings.TrimSpace(pc.Message)+in.trailer, paths, out); err != nil {
 			if len(done) == 0 {
 				fmt.Fprintln(out, Prefix+"no commits were created")
 			} else {
@@ -172,6 +185,9 @@ func writePlan(out io.Writer, in input, reply Reply) {
 		for _, f := range pc.Files {
 			fmt.Fprintln(out, "       "+describe(byPath[f]))
 		}
+	}
+	if in.trailer != "" {
+		fmt.Fprintf(out, "\n  Each commit ends with %q.\n", strings.TrimSpace(in.trailer))
 	}
 	fmt.Fprintln(out)
 }

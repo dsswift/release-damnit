@@ -385,3 +385,30 @@ func TestRunStopsOnAFailedCommit(t *testing.T) {
 		t.Errorf("HEAD = %q", got)
 	}
 }
+
+func TestRunWorkTrailer(t *testing.T) {
+	dir := newRepo(t)
+	write(t, dir, commitcheck.VantageFile, "roadmap: APP\nwork: APPW\n")
+	gitT(t, dir, "add", "-A")
+	gitT(t, dir, "commit", "-q", "-m", "chore(repo): track work")
+	write(t, dir, "apps/web/index.ts", "export const x = 1\n")
+
+	plan := func() *stub {
+		return &stub{replies: []Reply{{Commits: []PlannedCommit{{Message: "fix(web): export x", Files: []string{"apps/web/index.ts"}}}}}}
+	}
+	var out bytes.Buffer
+	err := Run(context.Background(), Options{Dir: dir, Yes: true, Planner: plan(), Out: &out})
+	if err == nil || !strings.Contains(err.Error(), "pass --work APPW-15") {
+		t.Fatalf("no --work in a tracked repo: err = %v", err)
+	}
+	if err := Run(context.Background(), Options{Dir: dir, Yes: true, Planner: plan(), Out: &out, Work: []string{"WEB-3"}}); err == nil || !strings.Contains(err.Error(), "is of kind WEB") {
+		t.Fatalf("--work of another kind: err = %v", err)
+	}
+
+	if err := Run(context.Background(), Options{Dir: dir, Yes: true, Planner: plan(), Out: &out, Work: []string{"APPW-15", "APP-4"}}); err != nil {
+		t.Fatalf("%v\n%s", err, out.String())
+	}
+	if got := gitT(t, dir, "log", "-1", "--format=%B"); got != "fix(web): export x\n\nWork: APPW-15, APP-4" {
+		t.Errorf("message = %q", got)
+	}
+}

@@ -1,5 +1,6 @@
 // Package commitcheck enforces the commit convention: a conventional header
-// whose scope names the one package the commit touches.
+// whose scope names the one package the commit touches, and, in a repo that
+// tracks work, a trailer naming the item the commit is part of.
 package commitcheck
 
 import (
@@ -23,6 +24,10 @@ type Rules struct {
 	// release-please config: then only the header rules apply and any scope
 	// is accepted.
 	Config *config.Config
+
+	// Work is the repo's work tracking from its vantage.yaml. When it is
+	// on, every message names its item in a "Work:" trailer.
+	Work Tracking
 }
 
 // RulesFor builds the rules from a loaded config, or the defaults when cfg is nil.
@@ -107,11 +112,11 @@ func Check(rules Rules, message string, files []string) Result {
 	h, ok := ParseHeader(header)
 	if !ok {
 		result.Problems = []string{fmt.Sprintf("header %q must look like type(scope): description, with one space after the colon", header)}
-		return result
+	} else {
+		result.Problems = append(result.Problems, checkHeader(rules, h)...)
+		result.Problems = append(result.Problems, checkScope(rules, h, files)...)
 	}
-
-	result.Problems = append(result.Problems, checkHeader(rules, h)...)
-	result.Problems = append(result.Problems, checkScope(rules, h, files)...)
+	result.Problems = append(result.Problems, checkWork(rules.Work, message)...)
 	return result
 }
 
@@ -199,6 +204,108 @@ func checkScope(rules Rules, h Header, files []string) []string {
 		fmt.Fprintf(&b, "\n  %s: %s", pkg.Scope(), strings.Join(byPackage[pkg], ", "))
 	}
 	return []string{b.String()}
+}
+
+var itemPattern = regexp.MustCompile(`^([A-Za-z][A-Za-z0-9]*)-([0-9]+)$`)
+
+// checkWork checks the "Work:" trailers in the message's trailer block, its
+// last paragraph after the header. Each names one or more items, comma
+// separated, of the repo's work or roadmap kind.
+func checkWork(t Tracking, message string) []string {
+	if !t.On() {
+		return nil
+	}
+	paragraphs := bodyParagraphs(message)
+	var trailers []string
+	if len(paragraphs) > 1 {
+		trailers = workValues(paragraphs[len(paragraphs)-1])
+	}
+	if len(trailers) == 0 {
+		for i, p := range paragraphs {
+			if i == 0 {
+				p = p[1:]
+			}
+			if len(workValues(p)) > 0 {
+				return []string{fmt.Sprintf("the \"Work:\" trailer must be in the last paragraph of the message, with any other trailers (%s)", VantageFile)}
+			}
+		}
+		return []string{fmt.Sprintf("no \"Work:\" trailer; end the message with a line like \"Work: %s\" naming the %s item this commit is part of (%s)", t.example(), t.kindNames(), VantageFile)}
+	}
+
+	var problems []string
+	for _, value := range trailers {
+		items := strings.Split(value, ",")
+		for _, item := range items {
+			item = strings.TrimSpace(item)
+			if p := t.itemProblem(item); p != "" {
+				problems = append(problems, fmt.Sprintf("\"Work: %s\": %s", strings.TrimSpace(value), p))
+			}
+		}
+	}
+	return problems
+}
+
+// itemProblem says what is wrong with one item key, or nothing.
+func (t Tracking) itemProblem(item string) string {
+	m := itemPattern.FindStringSubmatch(item)
+	if m == nil {
+		return fmt.Sprintf("%q is not an item key like %q; name one or more, comma separated", item, t.example())
+	}
+	if t.On() && !contains(t.kinds(), m[1]) {
+		return fmt.Sprintf("%s is of kind %s; name the %s item this commit is part of (%s)", item, m[1], t.kindNames(), VantageFile)
+	}
+	return ""
+}
+
+func (t Tracking) example() string {
+	if !t.On() {
+		return "KIND-15"
+	}
+	return t.Kind + "-15"
+}
+
+func (t Tracking) kindNames() string { return strings.Join(t.kinds(), " or ") }
+
+// bodyParagraphs splits a raw message into its paragraphs, the header's
+// first, as git keeps it: comment lines are dropped, and nothing below the
+// scissors line of a verbose commit counts.
+func bodyParagraphs(message string) [][]string {
+	var paragraphs [][]string
+	var current []string
+	for _, line := range strings.Split(message, "\n") {
+		line = strings.TrimRight(line, "\r")
+		if strings.HasPrefix(line, "# ------------------------ >8 ------------------------") {
+			break
+		}
+		if strings.HasPrefix(line, "#") {
+			continue
+		}
+		if strings.TrimSpace(line) == "" {
+			if len(current) > 0 {
+				paragraphs = append(paragraphs, current)
+				current = nil
+			}
+			continue
+		}
+		current = append(current, line)
+	}
+	if len(current) > 0 {
+		paragraphs = append(paragraphs, current)
+	}
+	return paragraphs
+}
+
+// workValues returns the value of each "Work:" line in a paragraph. The key
+// matches in any case, as git trailer keys do.
+func workValues(paragraph []string) []string {
+	var values []string
+	for _, line := range paragraph {
+		key, value, ok := strings.Cut(line, ":")
+		if ok && strings.EqualFold(key, "Work") {
+			values = append(values, value)
+		}
+	}
+	return values
 }
 
 func scopeRequiredProblem(rules Rules) string {

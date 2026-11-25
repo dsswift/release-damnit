@@ -15,6 +15,7 @@ release-damnit uses your existing Release Please configuration but reads git his
 - Creates GitHub releases with Release Please's tag naming (`{component}-v{version}`, or `v{version}` with `include-component-in-tag: false`)
 - Commands beside the default release run: `check-commit`, `check-commits`, `commit`, `land`, `sync`, `hooks`, `publish`, `init` (see README.md)
 - Correctly traverses merge commits to find all conventional commits
+- Checks every commit, in the hook and on `land`, against the commit rules: a conventional header, a scope that names the one package it touches, and, when the repo's `vantage.yaml` names a `work:` kind, a `Work: <KIND>-<n>` trailer in its last paragraph naming an item of that kind or the `roadmap:` kind (README, "Work Trailer")
 
 ## Testing
 

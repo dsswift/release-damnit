@@ -121,6 +121,35 @@ The scope must match the files:
 
 Files outside every package can ride along with one package's files. Deletions and both sides of a rename count. Merge, `Revert "`, `fixup!`, `squash!` and release commits (`chore: release ...`, `chore(release): ...`) pass without a check. A repo with no `release-please-config.json` gets only the header rules, and any scope.
 
+### Work Trailer
+
+A repo can ask every commit to name the work it is part of. It turns this on by naming a work kind in the `vantage.yaml` at its root:
+
+```yaml
+roadmap: APP   # the kind its roadmap items are
+work: APPW     # the kind its work items are
+```
+
+Then every checked commit ends with a trailer, in its last paragraph, that names an item of the work kind or the roadmap kind:
+
+```text
+feat(web): add the login page
+
+Work: APPW-15
+```
+
+- Name several items comma separated (`Work: APPW-15, APP-4`) or on several `Work:` lines.
+- An item of another kind, or anything that is not `KIND-<number>`, fails.
+- A `Work:` line above the last paragraph fails: git reads trailers only from the last one.
+- Only the top-level `work:` and `roadmap:` keys are read. A `# comment` after a value is dropped.
+- With no `vantage.yaml`, or one with no `work:` key, the rule is off. Naming only `roadmap:` does not turn it on.
+- Commits that skip the check (merges, reverts, fixups, release commits) skip this rule too.
+
+```text
+$ git commit -m "feat(web): add the login page"
+release-damnit check-commit: no "Work:" trailer; end the message with a line like "Work: APPW-15" naming the APPW or APP item this commit is part of (vantage.yaml)
+```
+
 ```text
 $ git commit -m "feat(web): add the login page"
 release-damnit check-commit: this commit changes 2 packages; split into one commit per package:
@@ -143,6 +172,7 @@ release-damnit commit             # plan, confirm, commit
 release-damnit commit --dry-run   # show the plan only
 release-damnit commit --staged    # plan only what is staged
 release-damnit commit --yes       # commit without asking
+release-damnit commit --work APPW-15   # end every commit with this Work trailer
 ```
 
 `commit` takes every modified, deleted, renamed and untracked (not ignored) file, or only the staged ones with `--staged`. It splits them by package with the same config the commit check reads, then asks Claude to group each package's files into commits and write the messages. The reply is checked before anything is committed: every file is in exactly one commit, each commit touches one package, and each message passes the [commit rules](#commit-rules). A plan that fails is sent back once with the problems; a second failure stops with nothing committed.
@@ -150,6 +180,8 @@ release-damnit commit --yes       # commit without asking
 It shows the plan and asks before committing. Each commit is a plain `git commit`, so the hooks run. Only the plan's files go in each commit; anything else you have staged stays staged. If a commit fails, it stops and lists the commits it made. It never pushes; `land` does that.
 
 Files that may hold secrets are skipped and listed, and never read or sent: `appsettings.json`, `local.settings.json`, `docker-compose.yml`, `.env`, `.env.*`, `credentials.json`. Commit their non-secret parts by hand.
+
+In a repo that [tracks work](#work-trailer), `--work` is required. It names the items the commits are part of (repeat it, or comma separate), and each commit ends with that `Work:` trailer.
 
 It runs the `claude` CLI (Claude Code) in print mode with structured output. `--model` picks the model (default `haiku`). There is no other configuration.
 

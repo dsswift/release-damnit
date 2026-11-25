@@ -12,20 +12,26 @@ import (
 )
 
 // LoadRules returns the rules for the repo containing dir: from its
-// release-please config when it has one, else the defaults.
+// release-please config when it has one, else the defaults, with the work
+// tracking its vantage.yaml names.
 func LoadRules(dir string) (Rules, string, error) {
 	root, err := git.Toplevel(dir)
 	if err != nil {
 		return Rules{}, "", err
 	}
-	if _, err := os.Stat(filepath.Join(root, config.ConfigFile)); errors.Is(err, os.ErrNotExist) {
-		return RulesFor(nil), root, nil
-	}
-	cfg, err := config.Load(root)
+	work, err := ReadTracking(root)
 	if err != nil {
 		return Rules{}, "", err
 	}
-	return RulesFor(cfg), root, nil
+	var cfg *config.Config
+	if _, err := os.Stat(filepath.Join(root, config.ConfigFile)); !errors.Is(err, os.ErrNotExist) {
+		if cfg, err = config.Load(root); err != nil {
+			return Rules{}, "", err
+		}
+	}
+	rules := RulesFor(cfg)
+	rules.Work = work
+	return rules, root, nil
 }
 
 // CheckStaged checks the message in msgFile against the staged changes, as a

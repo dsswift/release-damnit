@@ -85,6 +85,10 @@ type input struct {
 
 	// diffs maps a change's path to its diff, already truncated.
 	diffs map[string]string
+
+	// trailer is the "Work:" paragraph each message gets after its header,
+	// with the blank line before it. Empty when none is given.
+	trailer string
 }
 
 func (in input) changes() []Change {
@@ -148,7 +152,7 @@ func (in input) check(reply Reply) []string {
 				problems = append(problems, fmt.Sprintf("commit %d (%q): this repo has no packages; drop the scope", n, msg))
 			}
 		}
-		for _, p := range commitcheck.Check(in.rules, msg, paths).Problems {
+		for _, p := range commitcheck.Check(in.rules, msg+in.trailer, paths).Problems {
 			problems = append(problems, fmt.Sprintf("commit %d (%q): %s", n, msg, p))
 		}
 	}

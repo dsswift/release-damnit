@@ -172,3 +172,75 @@ func TestCheckRange(t *testing.T) {
 		}
 	}
 }
+
+func TestLoadRules_ReadsVantageYAML(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration test")
+	}
+	dir := newMonorepo(t)
+	if rules, _, err := LoadRules(dir); err != nil || rules.Work.On() {
+		t.Fatalf("no vantage.yaml: work = %+v, %v; want off", rules.Work, err)
+	}
+
+	write(t, dir, VantageFile, "hub: https://hub.example.com\nworkspace: app\nroadmap: APP   # roadmap items\nwork: APPW\n")
+	rules, _, err := LoadRules(filepath.Join(dir, "apps/web"))
+	if err != nil {
+		t.Fatalf("LoadRules: %v", err)
+	}
+	if rules.Work != (Tracking{Kind: "APPW", Roadmap: "APP"}) {
+		t.Errorf("work = %+v, want APPW and APP", rules.Work)
+	}
+	if rules.Config == nil || len(rules.Config.Packages) != 2 {
+		t.Error("the release config was not loaded beside vantage.yaml")
+	}
+
+	write(t, dir, VantageFile, "work: not a kind\n")
+	if _, _, err := LoadRules(dir); err == nil || !strings.Contains(err.Error(), "must be a kind key") {
+		t.Errorf("bad kind: err = %v", err)
+	}
+}
+
+func TestCheckRange_Work(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration test")
+	}
+	dir := newMonorepo(t)
+	write(t, dir, VantageFile, "roadmap: APP\nwork: APPW\n")
+	run(t, dir, "add", "-A")
+	run(t, dir, "commit", "-qm", "chore(repo): track work\n\nWork: APP-1")
+	base := run(t, dir, "rev-parse", "HEAD")
+
+	write(t, dir, "apps/web/a.txt", "1\n")
+	run(t, dir, "commit", "-qam", "feat(web): good\n\nWork: APPW-15")
+	write(t, dir, "apps/web/a.txt", "2\n")
+	run(t, dir, "commit", "-qam", "fix(web): no trailer")
+	run(t, dir, "checkout", "-qb", "side", base)
+	write(t, dir, "apps/api/b.txt", "2\n")
+	run(t, dir, "commit", "-qam", "fix(api): other kind\n\nWork: WEB-3")
+	run(t, dir, "checkout", "-q", "main")
+	run(t, dir, "merge", "-q", "--no-ff", "--no-edit", "side")
+
+	results, err := CheckRange(dir, base+"..HEAD")
+	if err != nil {
+		t.Fatalf("CheckRange: %v", err)
+	}
+	if len(results) != 3 {
+		t.Fatalf("checked %d commits, want the 3 non-merge commits", len(results))
+	}
+	var headers []string
+	for _, f := range Failures(results) {
+		headers = append(headers, f.Header)
+	}
+	if strings.Join(headers, "|") != "fix(web): no trailer|fix(api): other kind" {
+		t.Errorf("failures = %v", headers)
+	}
+
+	write(t, dir, "apps/web/a.txt", "3\n")
+	run(t, dir, "add", "-A")
+	if r := checkStaged(t, dir, "fix(web): staged\n\nWork: APPW-16\n"); !r.OK() {
+		t.Errorf("staged with a trailer: problems = %q", r.Problems)
+	}
+	if r := checkStaged(t, dir, "fix(web): staged\n"); r.OK() {
+		t.Error("staged with no trailer passed")
+	}
+}

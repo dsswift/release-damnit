@@ -1,4 +1,4 @@
-.PHONY: build test test-short test-integration test-e2e clean lint fmt coverage
+.PHONY: build test test-short test-integration test-e2e clean lint fmt coverage check land
 
 # Build settings
 BINARY_NAME=release-damnit
@@ -43,6 +43,16 @@ test-integration:
 test-e2e:
 	go test -v -tags=e2e ./e2e/...
 
+# The full check before a commit lands: what CI runs, here first
+check:
+	go vet ./...
+	@unformatted="$$(gofmt -l .)"; if [ -n "$$unformatted" ]; then echo "gofmt needed on:"; echo "$$unformatted"; exit 1; fi
+	go test ./...
+
+# Run the check, then land the commits on main (BRANCH=<branch> lands a branch)
+land: check
+	release-damnit land $(BRANCH)
+
 # Generate coverage report
 coverage:
 	go test -coverprofile=coverage.out ./...
@@ -82,6 +92,8 @@ help:
 	@echo "Available targets:"
 	@echo "  build           - Build binary for current platform"
 	@echo "  build-all       - Build binaries for all platforms"
+	@echo "  check           - Vet, gofmt, and run all tests"
+	@echo "  land            - Run the check, then land the commits on main"
 	@echo "  test            - Run all tests"
 	@echo "  test-short      - Run unit tests only (fast)"
 	@echo "  test-integration - Run integration tests"

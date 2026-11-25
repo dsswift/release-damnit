@@ -18,6 +18,8 @@ release-damnit uses your existing Release Please configuration but reads git his
 
 ## Testing
 
+`make land` runs `make check` (vet, gofmt, every test) and then `release-damnit land`.
+
 ```bash
 # Unit tests (fast, no git needed)
 go test ./internal/... -short

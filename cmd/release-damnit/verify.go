@@ -34,8 +34,9 @@ func runVerify(args []string) int {
 Check that the commit being released carries a landing proof: a note that
 release-damnit land signed after the repository's check passed, signed by a
 key the allowed signers list, for exactly that commit's tree, naming the
-check the repository names. A version commit CI made needs none; the commit
-under it is checked. Fails with a plain message when any part is missing or
+check the repository names. A commit that changes only machine-owned files
+(release files, the config's machine-paths, --allow paths) needs none; the
+commit under it is checked. Fails with a plain message when any part is missing or
 wrong. Run it as a release pipeline's first step.
 
 Options:`)
@@ -85,7 +86,7 @@ Options:`)
 	}
 	st := v.Proof.Statement
 	if v.Commit != v.Released {
-		fmt.Printf("%s%s is a version commit on %s\n", verifyPrefix, short(v.Released), short(v.Commit))
+		fmt.Printf("%s%s sits on %s with only machine commits between\n", verifyPrefix, short(v.Released), short(v.Commit))
 	}
 	fmt.Printf("%s%s landed by %s at %s: %q passed on tree %s\n", verifyPrefix, short(v.Commit), st.Signer, st.Time.UTC().Format("2006-01-02 15:04 UTC"), st.Check, short(st.Tree))
 	return 0

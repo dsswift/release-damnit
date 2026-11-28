@@ -36,16 +36,17 @@ type Verified struct {
 	Proof            Proof
 }
 
-// maxVersionCommits bounds the walk down through version commits.
-const maxVersionCommits = 20
+// maxMachineCommits bounds the walk down through machine commits.
+const maxMachineCommits = 50
 
 // ErrNoProof is returned when the commit being released has no proof.
 var ErrNoProof = errors.New("no landing proof")
 
 // Verify checks that the commit being released carries a landing proof: a
 // note signed by an allowed signer, for exactly that commit's tree. A
-// version commit CI made (subject "chore: release ...", one parent, only
-// release files changed) needs none: Verify checks the commit under it.
+// machine commit (one parent, changing only release files and the config's
+// machine-paths, such as CI's version commit) needs none: Verify checks the
+// commit under it.
 func Verify(opts VerifyOptions) (Verified, error) {
 	if opts.Commit == "" {
 		opts.Commit = "HEAD"
@@ -69,18 +70,18 @@ func Verify(opts VerifyOptions) (Verified, error) {
 	if err != nil {
 		return Verified{}, fmt.Errorf("no commit %s", opts.Commit)
 	}
-	allowed, err := releaseFiles(root, opts.Allow)
+	owned, err := machineOwned(root, opts.Allow)
 	if err != nil {
 		return Verified{}, err
 	}
 
 	commit := released
-	for range maxVersionCommits {
+	for range maxMachineCommits {
 		note, ok := Read(root, commit)
 		if ok {
 			return check(root, commit, released, note, opts)
 		}
-		ok, err := isVersionCommit(root, commit, allowed)
+		ok, err := isMachineCommit(root, commit, owned)
 		if err != nil {
 			return Verified{}, err
 		}
@@ -92,7 +93,7 @@ func Verify(opts VerifyOptions) (Verified, error) {
 			return Verified{}, err
 		}
 	}
-	return Verified{}, fmt.Errorf("%w: more than %d version commits sit on %s with no landed commit under them", ErrNoProof, maxVersionCommits, short(released))
+	return Verified{}, fmt.Errorf("%w: more than %d machine commits sit under %s with no landed commit below them", ErrNoProof, maxMachineCommits, short(released))
 }
 
 // ErrWrongTree is returned when a proof is for another tree than its commit's.
@@ -123,12 +124,9 @@ func check(root, commit, released, note string, opts VerifyOptions) (Verified, e
 	return Verified{Commit: commit, Released: released, Proof: p}, nil
 }
 
-// isVersionCommit reports whether commit is a version commit CI made: one
-// parent, the subject publish writes, and only release files changed.
-func isVersionCommit(root, commit string, allowed map[string]bool) (bool, error) {
-	if !strings.HasPrefix(subject(root, commit), "chore: release ") {
-		return false, nil
-	}
+// isMachineCommit reports whether commit is one only machines make: one
+// parent, and every file it changes is machine owned.
+func isMachineCommit(root, commit string, owned owned) (bool, error) {
 	parents, err := git.Output(root, "rev-list", "--parents", "-n", "1", commit)
 	if err != nil {
 		return false, err
@@ -141,28 +139,60 @@ func isVersionCommit(root, commit string, allowed map[string]bool) (bool, error)
 		return false, err
 	}
 	for _, f := range changed {
-		if !allowed[f] {
+		if !owned.has(f) {
 			return false, nil
 		}
 	}
-	return true, nil
+	return len(changed) > 0, nil
 }
 
-// releaseFiles is every file a version commit may change, from the
-// repository's release config, plus allow (relative to the repository root).
-func releaseFiles(root string, allow []string) (map[string]bool, error) {
-	files := map[string]bool{config.ManifestFile: true}
+// owned is what machines write: exact files, and folders by prefix.
+type owned struct {
+	files   map[string]bool
+	folders []string
+}
+
+func (o owned) has(path string) bool {
+	if o.files[path] {
+		return true
+	}
+	for _, f := range o.folders {
+		if strings.HasPrefix(path, f) {
+			return true
+		}
+	}
+	return false
+}
+
+// machineOwned is every path a commit with no proof may change: the release
+// files from the repository's release config, its machine-paths, and allow.
+// A path ending in "/" is a folder. The config is read from the checkout, and
+// a commit that changes it is never machine owned, so no commit under the
+// proof can widen the list.
+func machineOwned(root string, allow []string) (owned, error) {
+	o := owned{files: map[string]bool{config.ManifestFile: true}}
+	paths := allow
 	if _, err := os.Stat(filepath.Join(root, config.ConfigFile)); err == nil {
 		cfg, err := config.Load(root)
 		if err != nil {
-			return nil, err
+			return owned{}, err
 		}
-		files = cfg.ReleaseFiles()
+		o.files = cfg.ReleaseFiles()
+		paths = append(append([]string(nil), cfg.MachinePaths...), allow...)
 	}
-	for _, a := range allow {
-		files[strings.TrimPrefix(filepath.ToSlash(filepath.Clean(a)), "./")] = true
+	for _, p := range paths {
+		folder := strings.HasSuffix(p, "/")
+		clean := strings.TrimPrefix(filepath.ToSlash(filepath.Clean(p)), "./")
+		if clean == "." || clean == config.ConfigFile {
+			return owned{}, fmt.Errorf("machine path %q would let a commit with no proof change what verify trusts", p)
+		}
+		if folder {
+			o.folders = append(o.folders, clean+"/")
+		} else {
+			o.files[clean] = true
+		}
 	}
-	return files, nil
+	return o, nil
 }
 
 // CheckAt is the check command the repository names at rev, or "" when its

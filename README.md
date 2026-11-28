@@ -260,7 +260,20 @@ Run it as a release pipeline's first step. It fails, with a plain message saying
 - the allowed signers do not list the key that signed it, list it for another principal, or the signature does not verify for the namespace `release-damnit-landing`;
 - the proof is not in the form above.
 
-A pipeline releases from the branch tip, which may be CI's own version commit on top of a landing. Verify accepts a version commit with no proof when its subject starts with `chore: release `, it has one parent, and it changes only release files: each package's `VERSION`, changelog, and `extra-files`, the manifest, and every `--allow` path (what a `before-publish` step adds to the version commit). It then checks the commit under it. Anything else with no proof fails.
+A pipeline releases from the branch tip, which may be a commit a machine made on top of a landing: CI's own version commit, an image tag updater, a results recorder. Verify accepts a commit with no proof when it has one parent and changes only machine-owned files, and then checks the commit under it:
+
+- the release files: each package's `VERSION`, changelog, and `extra-files`, and the manifest;
+- the config's `machine-paths`: files, or folders ending in `/`, that only machines write;
+- every `--allow` path (what a `before-publish` step adds to the version commit).
+
+```json
+{
+  "check": "make check",
+  "machine-paths": ["deploy/", "perf/results/"]
+}
+```
+
+Anything else with no proof fails. The list is read from the checkout, and the config itself can never be a machine path, so a commit with no proof cannot widen it.
 
 ### Allowed signers
 
@@ -387,6 +400,7 @@ release-damnit uses your existing Release Please configuration files unchanged:
 | `types` | top | Allowed commit types (default `["feat","fix","chore","docs"]`). `"feat!"` means the same as `"feat"`. |
 | `subject-max-length` | top | Longest commit description (default 50). |
 | `check` | top | The repository's full check, one command line. `land` runs it before every landing and signs its proof; `verify` checks the proof names it. See "The landing proof". |
+| `machine-paths` | top | Files, or folders ending in `/`, that only machines write. A commit that changes only these and the release files needs no landing proof. See "Verifying". |
 
 Unknown keys are ignored. Every tag, compare link and release name comes from the same tag rule, so they always match.
 

@@ -43,6 +43,12 @@ type Config struct {
 	// land runs before every landing and names in the landing proof. Empty
 	// means the repository names none, and its landings carry no proof.
 	Check string
+
+	// MachinePaths are repo-relative files, or folders ending in "/", that
+	// only machines write (an image tag updater, a results recorder). A
+	// commit that changes nothing but these and the release files needs no
+	// landing proof.
+	MachinePaths []string
 }
 
 // ConfigFile and ManifestFile are the release-please file names at the repo root.
@@ -128,6 +134,7 @@ type releasePleaseConfig struct {
 	Types                 []string `json:"types"`
 	SubjectMaxLength      *int     `json:"subject-max-length"`
 	Check                 string   `json:"check"`
+	MachinePaths          []string `json:"machine-paths"`
 }
 
 type packageConfig struct {
@@ -215,6 +222,7 @@ func Load(repoRoot string) (*Config, error) {
 		Types:            types,
 		SubjectMaxLength: subjectMax,
 		Check:            check,
+		MachinePaths:     rpConfig.MachinePaths,
 	}
 
 	// Build linked groups lookup (component name -> group name)

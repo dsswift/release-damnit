@@ -325,3 +325,36 @@ func readFile(t *testing.T, path string) string {
 	}
 	return string(data)
 }
+
+func TestVerify_PassesCommitsThatTouchOnlyMachinePaths(t *testing.T) {
+	r := newRepo(t)
+	write(t, r.dir, "release-please-config.json", `{"check": "make check", "machine-paths": ["deploy/", "perf/latest.json"], "packages": {".": {"component": "app"}}}`)
+	landed := commit(t, r.dir, "main.go", "package main // landed\n", "chore: name the machine paths")
+	r.prove(t, landed, "", "make check")
+	commit(t, r.dir, "deploy/app/tags.yaml", "tag: 1.1.0\n", "chore(deploy): update image tags [skip ci]")
+	commit(t, r.dir, "perf/latest.json", "{}\n", "chore: record perf result [skip ci]")
+	v, err := r.verify(t)
+	if err != nil {
+		t.Fatalf("Verify: %v", err)
+	}
+	if v.Commit != landed {
+		t.Errorf("verified %s, want the landed commit %s under the machine commits", v.Commit, landed)
+	}
+
+	commit(t, r.dir, "deploy/app/tags.yaml", "tag: 1.2.0\n", "chore(deploy): update image tags")
+	write(t, r.dir, "deploy/app/tags.yaml", "tag: 1.3.0\n")
+	commit(t, r.dir, "main.go", "package main // and code\n", "chore(deploy): update image tags")
+	if _, err := r.verify(t); !errors.Is(err, ErrNoProof) {
+		t.Fatalf("a machine-path commit that also changes code: err = %v, want ErrNoProof", err)
+	}
+}
+
+func TestVerify_RefusesTheConfigAsAMachinePath(t *testing.T) {
+	r := newRepo(t)
+	write(t, r.dir, "release-please-config.json", `{"check": "make check", "machine-paths": ["release-please-config.json"], "packages": {".": {"component": "app"}}}`)
+	commit(t, r.dir, "main.go", "package main // landed\n", "chore: widen the machine paths")
+	r.prove(t, "HEAD", "", "make check")
+	if _, err := r.verify(t); err == nil || !strings.Contains(err.Error(), "would let a commit") {
+		t.Fatalf("err = %v, want the config refused as a machine path", err)
+	}
+}

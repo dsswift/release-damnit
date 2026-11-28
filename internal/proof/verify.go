@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 
@@ -146,18 +147,25 @@ func isMachineCommit(root, commit string, owned owned) (bool, error) {
 	return len(changed) > 0, nil
 }
 
-// owned is what machines write: exact files, and folders by prefix.
+// owned is what machines write: exact files, folders by prefix, and glob
+// patterns (path.Match: "*" stays inside one folder).
 type owned struct {
-	files   map[string]bool
-	folders []string
+	files    map[string]bool
+	folders  []string
+	patterns []string
 }
 
-func (o owned) has(path string) bool {
-	if o.files[path] {
+func (o owned) has(file string) bool {
+	if o.files[file] {
 		return true
 	}
 	for _, f := range o.folders {
-		if strings.HasPrefix(path, f) {
+		if strings.HasPrefix(file, f) {
+			return true
+		}
+	}
+	for _, p := range o.patterns {
+		if ok, _ := path.Match(p, file); ok {
 			return true
 		}
 	}
@@ -166,7 +174,8 @@ func (o owned) has(path string) bool {
 
 // machineOwned is every path a commit with no proof may change: the release
 // files from the repository's release config, its machine-paths, and allow.
-// A path ending in "/" is a folder. The config is read from the checkout, and
+// A path ending in "/" is a folder, and one with *, ?, or [ is a pattern.
+// The config is read from the checkout, and
 // a commit that changes it is never machine owned, so no commit under the
 // proof can widen the list.
 func machineOwned(root string, allow []string) (owned, error) {
@@ -183,12 +192,19 @@ func machineOwned(root string, allow []string) (owned, error) {
 	for _, p := range paths {
 		folder := strings.HasSuffix(p, "/")
 		clean := strings.TrimPrefix(filepath.ToSlash(filepath.Clean(p)), "./")
-		if clean == "." || clean == config.ConfigFile {
+		pattern := strings.ContainsAny(clean, "*?[")
+		if _, err := path.Match(clean, ""); pattern && err != nil {
+			return owned{}, fmt.Errorf("machine path %q is not a valid pattern: %v", p, err)
+		}
+		if matches, _ := path.Match(clean, config.ConfigFile); clean == "." || clean == config.ConfigFile || matches {
 			return owned{}, fmt.Errorf("machine path %q would let a commit with no proof change what verify trusts", p)
 		}
-		if folder {
+		switch {
+		case pattern:
+			o.patterns = append(o.patterns, clean)
+		case folder:
 			o.folders = append(o.folders, clean+"/")
-		} else {
+		default:
 			o.files[clean] = true
 		}
 	}

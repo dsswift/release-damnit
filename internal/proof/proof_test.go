@@ -328,11 +328,12 @@ func readFile(t *testing.T, path string) string {
 
 func TestVerify_PassesCommitsThatTouchOnlyMachinePaths(t *testing.T) {
 	r := newRepo(t)
-	write(t, r.dir, "release-please-config.json", `{"check": "make check", "machine-paths": ["deploy/", "perf/latest.json"], "packages": {".": {"component": "app"}}}`)
+	write(t, r.dir, "release-please-config.json", `{"check": "make check", "machine-paths": ["deploy/", "perf/latest.json", "apps/*/tags.yaml"], "packages": {".": {"component": "app"}}}`)
 	landed := commit(t, r.dir, "main.go", "package main // landed\n", "chore: name the machine paths")
 	r.prove(t, landed, "", "make check")
 	commit(t, r.dir, "deploy/app/tags.yaml", "tag: 1.1.0\n", "chore(deploy): update image tags [skip ci]")
 	commit(t, r.dir, "perf/latest.json", "{}\n", "chore: record perf result [skip ci]")
+	commit(t, r.dir, "apps/web/tags.yaml", "tag: 2\n", "chore(apps--web): deploy web 2 [skip ci]")
 	v, err := r.verify(t)
 	if err != nil {
 		t.Fatalf("Verify: %v", err)
@@ -340,6 +341,12 @@ func TestVerify_PassesCommitsThatTouchOnlyMachinePaths(t *testing.T) {
 	if v.Commit != landed {
 		t.Errorf("verified %s, want the landed commit %s under the machine commits", v.Commit, landed)
 	}
+
+	commit(t, r.dir, "apps/web/nested/tags.yaml", "tag: 3\n", "chore: deploy outside the pattern")
+	if _, err := r.verify(t); !errors.Is(err, ErrNoProof) {
+		t.Fatalf("a file the pattern does not match: err = %v, want ErrNoProof", err)
+	}
+	run(t, r.dir, "reset", "-q", "--hard", "HEAD^")
 
 	commit(t, r.dir, "deploy/app/tags.yaml", "tag: 1.2.0\n", "chore(deploy): update image tags")
 	write(t, r.dir, "deploy/app/tags.yaml", "tag: 1.3.0\n")
@@ -351,7 +358,7 @@ func TestVerify_PassesCommitsThatTouchOnlyMachinePaths(t *testing.T) {
 
 func TestVerify_RefusesTheConfigAsAMachinePath(t *testing.T) {
 	r := newRepo(t)
-	write(t, r.dir, "release-please-config.json", `{"check": "make check", "machine-paths": ["release-please-config.json"], "packages": {".": {"component": "app"}}}`)
+	write(t, r.dir, "release-please-config.json", `{"check": "make check", "machine-paths": ["release-please-*.json"], "packages": {".": {"component": "app"}}}`)
 	commit(t, r.dir, "main.go", "package main // landed\n", "chore: widen the machine paths")
 	r.prove(t, "HEAD", "", "make check")
 	if _, err := r.verify(t); err == nil || !strings.Contains(err.Error(), "would let a commit") {

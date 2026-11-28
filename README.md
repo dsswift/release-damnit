@@ -263,13 +263,13 @@ Run it as a release pipeline's first step. It fails, with a plain message saying
 A pipeline releases from the branch tip, which may be a commit a machine made on top of a landing: CI's own version commit, an image tag updater, a results recorder. Verify accepts a commit with no proof when it has one parent and changes only machine-owned files, and then checks the commit under it:
 
 - the release files: each package's `VERSION`, changelog, and `extra-files`, and the manifest;
-- the config's `machine-paths`: files, or folders ending in `/`, that only machines write;
+- the config's `machine-paths`: files, folders ending in `/`, or patterns (`*` stays inside one folder), that only machines write;
 - every `--allow` path (what a `before-publish` step adds to the version commit).
 
 ```json
 {
   "check": "make check",
-  "machine-paths": ["deploy/", "perf/results/"]
+  "machine-paths": ["perf/results/", "deploy/apps/*/kustomization.yaml"]
 }
 ```
 
@@ -400,7 +400,7 @@ release-damnit uses your existing Release Please configuration files unchanged:
 | `types` | top | Allowed commit types (default `["feat","fix","chore","docs"]`). `"feat!"` means the same as `"feat"`. |
 | `subject-max-length` | top | Longest commit description (default 50). |
 | `check` | top | The repository's full check, one command line. `land` runs it before every landing and signs its proof; `verify` checks the proof names it. See "The landing proof". |
-| `machine-paths` | top | Files, or folders ending in `/`, that only machines write. A commit that changes only these and the release files needs no landing proof. See "Verifying". |
+| `machine-paths` | top | Files, folders ending in `/`, or patterns, that only machines write. A commit that changes only these and the release files needs no landing proof. See "Verifying". |
 
 Unknown keys are ignored. Every tag, compare link and release name comes from the same tag rule, so they always match.
 

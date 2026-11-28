@@ -4,7 +4,7 @@ import "strings"
 
 // Release is the release-damnit release this source is. Every release commit
 // rewrites it, so a scaffold pins the release that wrote it.
-const Release = "v1.10.0" // x-release-please-version
+const Release = "v1.11.0" // x-release-please-version
 
 // DefaultActionRef is the release-damnit action a scaffolded workflow pins.
 const DefaultActionRef = "dsswift/release-damnit@" + Release

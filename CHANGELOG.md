@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [1.11.0](https://github.com/dsswift/release-damnit/compare/v1.10.0...v1.11.0) (2026-11-28)
+
+### Features
+
+* sign landing proofs and verify them in ci ([5aa86ff](https://github.com/dsswift/release-damnit/commit/5aa86ffe509a489699ea36390f36f04550eb6fe9))
+
 ## [1.10.0](https://github.com/dsswift/release-damnit/compare/v1.9.4...v1.10.0) (2026-11-25)
 
 ### Features

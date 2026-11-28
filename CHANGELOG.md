@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [1.14.0](https://github.com/dsswift/release-damnit/compare/v1.13.0...v1.14.0) (2026-11-28)
+
+### Features
+
+* land a tree whose check ran elsewhere ([2b399d7](https://github.com/dsswift/release-damnit/commit/2b399d732235a825524a9917a0195865c1bbfab9))
+
 ## [1.13.0](https://github.com/dsswift/release-damnit/compare/v1.12.0...v1.13.0) (2026-11-28)
 
 ### Features

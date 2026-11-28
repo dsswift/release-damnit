@@ -77,6 +77,7 @@ With no command, release-damnit runs the release analysis above. Its flags and o
 | `check-commits <range>` | Checks every non-merge commit in a revision range, e.g. `origin/main..HEAD`. |
 | `commit` | Commits the pending changes. Claude groups the files and writes messages that pass the commit rules. |
 | `land [branch]` | Runs the check, signs its proof, and lands main's local commits, or a branch as one `--no-ff` merge. |
+| `attest` | Signs a landing proof for HEAD's tree whose check passed elsewhere, for `land --proven`. |
 | `verify` | Checks that the commit being released carries a landing proof from an allowed signer. A pipeline's first step. |
 | `sync [dir...]` | Fast-forwards local main to the remote main, carrying uncommitted changes forward. |
 | `hooks` | Installs the commit-msg hook. |
@@ -242,6 +243,19 @@ When the push is rejected and land retries:
 - **Only the proofs moved** (another landing pushed its note first): the tree is the same, so the proof is kept, written on top of the remote's notes, and pushed again. The check does not rerun.
 
 A repository whose config names no `check` lands as before, with a warning that the landing carries no proof. A pipeline that verifies refuses it.
+
+### A check that runs away from the keys
+
+Some landers must not run the check where their keys are. A service that lands changes an agent wrote holds a forge credential and a signing key; running the change's own `make check` beside them would hand both to the code being checked. Such a lander runs the check somewhere that holds no key, on exactly the tree that will land, and then signs and lands in two steps:
+
+```bash
+release-damnit attest          # sign "the check passed on HEAD's tree"; runs nothing
+release-damnit land --proven   # push main's commits with that proof; runs no check
+```
+
+`attest` signs the same statement land does, with git's signing key, for HEAD's tree (`--commit` picks another) and the repository's `check` at that commit, and writes it as the commit's note. It runs nothing: the key vouches that the check passed where the lander ran it.
+
+`land --proven` lands main's own commits only (main checked out, no uncommitted changes, no branch named) and runs no check. Before it pushes, HEAD must carry a proof for its own tree that names the repository's check and that this lander's key signed. When the remote main has commits HEAD lacks, before the push or during it, it pushes nothing and exits 3: rebase, run the check on the new tree, attest, and land again. A race on the proofs alone keeps the proof and retries, as land does. Without `--proven`, land is unchanged.
 
 ## Verifying
 

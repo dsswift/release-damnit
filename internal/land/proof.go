@@ -38,6 +38,8 @@ func (l *lander) prove(commit string, dirs ...string) (bool, error) {
 	p, ok := l.proofs[tree]
 	if ok && p.Statement.Check == check {
 		l.logf("the check already passed on tree %s; its proof moves to %s", short(tree), short(commit))
+	} else if l.Proven {
+		return false, fmt.Errorf("no proof for tree %s, and a proven landing never runs the check", short(tree))
 	} else {
 		if l.signer == nil {
 			signer, err := proof.GitSigner(l.root, l.TempDir)

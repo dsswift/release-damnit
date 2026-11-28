@@ -12,6 +12,11 @@
 // "check") in a checkout of exactly the tree that lands, signs a landing
 // proof for that tree, and pushes it as a git note with the commit, in one
 // atomic push. A check that fails pushes nothing (proof.go).
+//
+// With Proven, land runs no check: it pushes main's own commits only when
+// HEAD already carries a valid proof for its tree, made where the check ran
+// (proof.Attest), and stops with ErrMainMoved instead of rebasing when the
+// remote main has moved (proven.go).
 package land
 
 import (
@@ -48,6 +53,10 @@ type Options struct {
 
 	// Out receives progress lines and git's own output (hooks, server messages).
 	Out io.Writer
+
+	// Proven lands main's local commits only with the proof HEAD already
+	// carries, and never runs the check (proven.go).
+	Proven bool
 }
 
 // Prefix starts every line land prints.
@@ -97,6 +106,9 @@ func Run(opts Options) error {
 		return err
 	}
 	current, _ := git.Output(root, "symbolic-ref", "--quiet", "--short", "HEAD")
+	if opts.Proven {
+		return l.landProven(current, dirty)
+	}
 	branch := opts.Branch
 	if branch == "" {
 		switch current {
@@ -193,6 +205,9 @@ func (l *lander) push(dir, base string, proved bool, attempt int) (pushed bool, 
 	if !mainMoved && !notesMoved {
 		return false, fmt.Errorf("push refused and %s/%s did not move; read the hook/server output above", l.Remote, l.Main)
 	}
+	if mainMoved && l.Proven {
+		return false, l.mainMoved(now)
+	}
 	if attempt >= l.Attempts {
 		return false, fmt.Errorf("%s/%s kept moving; gave up after %d attempts", l.Remote, l.Main, attempt)
 	}
@@ -230,6 +245,8 @@ func (l *lander) landMain() error {
 
 		if l.isAncestor(base, "HEAD") {
 			l.logf("local %s is on top of %s/%s; %d commit(s) to land", l.Main, l.Remote, l.Main, count)
+		} else if l.Proven {
+			return l.mainMoved(base)
 		} else {
 			l.logf("%s/%s has commits local %s lacks; rebasing %d local commit(s) onto it", l.Remote, l.Main, l.Main, count)
 			if err := l.rebase(base); err != nil {

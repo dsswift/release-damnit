@@ -13,8 +13,8 @@ release-damnit uses your existing Release Please configuration but reads git his
 - Reads `release-please-config.json` and `release-please-manifest.json` unchanged
 - Updates VERSION files and CHANGELOG.md in the same format
 - Creates GitHub releases with Release Please's tag naming (`{component}-v{version}`, or `v{version}` with `include-component-in-tag: false`)
-- Commands beside the default release run: `check-commit`, `check-commits`, `commit`, `land`, `verify`, `sync`, `hooks`, `publish`, `init` (see README.md)
-- `land` runs the config's `check` on exactly the tree that lands and signs a landing proof (a git note under `refs/notes/release-damnit`, SSH signature namespace `release-damnit-landing`), pushed atomically with main; `verify` checks it in the pipeline against the estate's allowed signers (README, "The landing proof", "Verifying")
+- Commands beside the default release run: `check-commit`, `check-commits`, `commit`, `land`, `attest`, `verify`, `sync`, `hooks`, `publish`, `init` (see README.md)
+- `land` runs the config's `check` on exactly the tree that lands and signs a landing proof (a git note under `refs/notes/release-damnit`, SSH signature namespace `release-damnit-landing`), pushed atomically with main; `verify` checks it in the pipeline against the estate's allowed signers (README, "The landing proof", "Verifying"). `attest` and `land --proven` are the same proof for a lander whose check runs away from its keys: attest signs a check that passed elsewhere, and land --proven pushes only a proven HEAD, runs no check, and exits 3 when main moved (README, "A check that runs away from the keys")
 - Correctly traverses merge commits to find all conventional commits
 - Checks every commit, in the hook and on `land`, against the commit rules: a conventional header, a scope that names the one package it touches, and, when the repo's `vantage.yaml` names a `work:` kind, a `Work: <KIND>-<n>` trailer in its last paragraph naming an item of that kind or the `roadmap:` kind (README, "Work Trailer")
 

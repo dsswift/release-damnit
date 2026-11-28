@@ -39,9 +39,15 @@ jobs:
         with:
           ref: ${{ github.ref_name }}
           fetch-depth: 0
+      # Verify first: the commit being released must carry the landing
+      # proof release-damnit land signed after the check passed. The
+      # estate's allowed signers are the repository or organization
+      # variable RELEASE_DAMNIT_ALLOWED_SIGNERS.
       - id: release
         uses: USES
         with:
+          verify: 'true'
+          allowed-signers: ${{ vars.RELEASE_DAMNIT_ALLOWED_SIGNERS }}
           since-last-release: 'true'
           publish: 'true'
 
@@ -75,9 +81,10 @@ const gitlabCI = `# Every push to the default branch versions every feat and fix
 # last release with release-damnit, commits and tags the version, and creates
 # the GitLab release. The tag pipeline then runs the build in .gitlab/build.yml.
 #
-# Needs one masked CI/CD variable, GITLAB_RELEASE_TOKEN: a project access
+# Needs two CI/CD variables: GITLAB_RELEASE_TOKEN, masked, a project access
 # token with the api and write_repository scopes and a role allowed to push
-# to the default branch.
+# to the default branch; and RELEASE_DAMNIT_ALLOWED_SIGNERS, the allowed
+# signers (ssh-keygen format) whose landing proofs a release accepts.
 
 stages:
   - release
@@ -96,7 +103,7 @@ release:
     GIT_DEPTH: "0"
     RELEASE_DAMNIT_VERSION: {{version}}
   script:
-    - apk add --no-cache git curl
+    - apk add --no-cache git curl openssh-keygen
     - ARCH=$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')
     - curl -fsSL -o /usr/local/bin/release-damnit "https://github.com/dsswift/release-damnit/releases/download/${RELEASE_DAMNIT_VERSION}/release-damnit-linux-${ARCH}"
     - chmod +x /usr/local/bin/release-damnit
@@ -107,6 +114,9 @@ release:
     # release must see that release's version commit and tags.
     - git fetch --tags --force origin "$CI_DEFAULT_BRANCH"
     - git checkout -B "$CI_DEFAULT_BRANCH" "origin/$CI_DEFAULT_BRANCH"
+    # The commit being released must carry the landing proof that
+    # release-damnit land signed after the check passed.
+    - release-damnit verify
     - release-damnit --since-last-release --report-file release-report.json
     # A [skip ci] marker would skip the tag pipeline too; the push option skips
     # only the version commit's own push pipeline.

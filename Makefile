@@ -49,8 +49,9 @@ check:
 	@unformatted="$$(gofmt -l .)"; if [ -n "$$unformatted" ]; then echo "gofmt needed on:"; echo "$$unformatted"; exit 1; fi
 	go test ./...
 
-# Run the check, then land the commits on main (BRANCH=<branch> lands a branch)
-land: check
+# Land the commits on main (BRANCH=<branch> lands a branch). land runs the
+# config's "check" (make check) on exactly what lands and signs its proof.
+land:
 	release-damnit land $(BRANCH)
 
 # Generate coverage report

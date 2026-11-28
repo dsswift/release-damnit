@@ -27,9 +27,13 @@ jobs:
         with:
           ref: ${{ github.ref_name }}
           fetch-depth: 0
+      # Verify first: the commit being released must carry the landing
+      # proof release-damnit land signed after the check passed.
       - id: release
         uses: ./
         with:
+          verify: 'true'
+          allowed-signers: ${{ vars.RELEASE_DAMNIT_ALLOWED_SIGNERS }}
           since-last-release: 'true'
           publish: 'true'
 

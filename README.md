@@ -13,8 +13,8 @@ release-damnit uses your existing Release Please configuration but reads git his
 Every repo, monorepo or single, works the same way:
 
 1. Work on `main`. Each commit touches one package, and its scope is that package. The commit-msg hook (`release-damnit hooks`) checks this on every commit. `release-damnit commit` can split and word the commits for you.
-2. `release-damnit land` puts the commits on the remote main. It rebases onto whatever landed meanwhile, checks the commits again, and pushes.
-3. On the push, CI runs the action with `publish: 'true'`. It bumps the versions, commits them, tags that commit, pushes, and creates the releases.
+2. `release-damnit land` puts the commits on the remote main. It rebases onto whatever landed meanwhile, checks the commits again, runs the repository's full check on exactly what lands, signs a proof that it passed, and pushes the commits and the proof together.
+3. On the push, CI runs the action with `verify: 'true'` and `publish: 'true'`. It first checks the landing proof, so a change nobody checked never releases. Then it bumps the versions, commits them, tags that commit, pushes, and creates the releases.
 
 New single repos get all of this from `release-damnit init`.
 
@@ -76,7 +76,8 @@ With no command, release-damnit runs the release analysis above. Its flags and o
 | `check-commit <msgfile>` | Checks a commit message against the staged files. This is the commit-msg hook. |
 | `check-commits <range>` | Checks every non-merge commit in a revision range, e.g. `origin/main..HEAD`. |
 | `commit` | Commits the pending changes. Claude groups the files and writes messages that pass the commit rules. |
-| `land [branch]` | Lands main's local commits, or a branch as one `--no-ff` merge, and pushes. |
+| `land [branch]` | Runs the check, signs its proof, and lands main's local commits, or a branch as one `--no-ff` merge. |
+| `verify` | Checks that the commit being released carries a landing proof from an allowed signer. A pipeline's first step. |
 | `sync [dir...]` | Fast-forwards local main to the remote main, carrying uncommitted changes forward. |
 | `hooks` | Installs the commit-msg hook. |
 | `publish` | Commits the version files, tags that commit, pushes, and creates the releases. |
@@ -198,6 +199,86 @@ On main, land fetches, rebases the local commits onto the remote main, runs the 
 
 When the push is rejected because main moved on the remote (a CI version commit, someone else's landing), land starts over on the new main. When the push is refused and main did not move, land stops and points you at the hook or server output. Land never force pushes and never skips hooks. When main is checked out with uncommitted changes to tracked files, often someone else's work in progress in a shared checkout, land does not rebase main in place. It lands main's commits as one `--no-ff` merge built in a temporary worktree, then fast-forwards main to it, carrying those changes forward. Land refuses uncommitted changes only on the branch it is landing, and on a branch it refuses a local main that is not checked out and holds commits that are neither on the remote nor copies of the branch's commits. A checked-out main with such commits is left for its own landing, with a note.
 
+### The landing proof
+
+Testing happens where the change lands, before it lands. CI runs no tests, yet nobody can skip them: every landing leaves a signed proof that the check passed, and the release pipeline refuses a commit without one.
+
+Name the repository's full check in `release-please-config.json`:
+
+```json
+{
+  "check": "make check"
+}
+```
+
+Before every push, land runs that command with `sh -c` in a checkout of exactly the tree that lands: your own checkout when it holds that tree with no changes to tracked files, otherwise the temporary merge worktree. The check must therefore work from a fresh checkout. Its output streams as it runs. When it fails, land stops and pushes nothing.
+
+When it passes, land signs a statement with your SSH signing key, the one git signs with (`gpg.format ssh` and `user.signingkey`, a key file or `key::` literal, with its private half in the agent or on disk), under the SSH signature namespace `release-damnit-landing`. The signer is the key's SHA256 fingerprint, so a proof names a key and no person, and is safe in a public repository. Set the key once:
+
+```bash
+git config --global gpg.format ssh
+git config --global user.signingkey ~/.ssh/id_ed25519.pub
+```
+
+The statement is a git note on the landed commit, under `refs/notes/release-damnit`:
+
+```text
+release-damnit landing proof v1
+tree 9c1e0f6b1f0f3e6c7a0d6c3b0e8a2f1d4c5b6a79
+check make check
+result pass
+time 2026-01-02T03:04:05Z
+signer SHA256:x3A0c8Yk3lGm6s5W9JvQ2bT1rN7pE4uZ0dF8hK2yL6o
+-----BEGIN SSH SIGNATURE-----
+...
+-----END SSH SIGNATURE-----
+```
+
+The signature covers every line above it. The proof binds the tree, not the commit, because the tree is what gets built. Land pushes main and the notes ref in one `git push --atomic`, so main never moves without its proof.
+
+When the push is rejected and land retries:
+
+- **Main moved** (a CI version commit, another landing): land rebases or merges again. The new tree is not the one checked, so the check runs again and a new proof is signed.
+- **Only the proofs moved** (another landing pushed its note first): the tree is the same, so the proof is kept, written on top of the remote's notes, and pushed again. The check does not rerun.
+
+A repository whose config names no `check` lands as before, with a warning that the landing carries no proof. A pipeline that verifies refuses it.
+
+## Verifying
+
+```bash
+release-damnit verify --allowed-signers ./allowed_signers
+RELEASE_DAMNIT_ALLOWED_SIGNERS="$(cat allowed_signers)" release-damnit verify
+```
+
+Options: `--commit` (default `HEAD`), `--remote` (default `origin`, fetched for its proofs first; empty fetches nothing), `--allowed-signers <file>` (default: the contents of the variable `RELEASE_DAMNIT_ALLOWED_SIGNERS`), `--allow <path>` (repeatable; see below).
+
+Run it as a release pipeline's first step. It fails, with a plain message saying what to do, when:
+
+- the commit has no proof: it was pushed without `release-damnit land`;
+- the proof is for another tree: what landed is not what was checked;
+- the proof names another command than the repository's `check` at that commit;
+- the allowed signers do not list the key that signed it, list it for another principal, or the signature does not verify for the namespace `release-damnit-landing`;
+- the proof is not in the form above.
+
+A pipeline releases from the branch tip, which may be CI's own version commit on top of a landing. Verify accepts a version commit with no proof when its subject starts with `chore: release `, it has one parent, and it changes only release files: each package's `VERSION`, changelog, and `extra-files`, the manifest, and every `--allow` path (what a `before-publish` step adds to the version commit). It then checks the commit under it. Anything else with no proof fails.
+
+### Allowed signers
+
+Each estate trusts its own landers, so the list is never in the tool. It is a file in ssh-keygen's ALLOWED SIGNERS format, one line per lander's key:
+
+```text
+SHA256:x3A0c8Yk3lGm6s5W9JvQ2bT1rN7pE4uZ0dF8hK2yL6o namespaces="release-damnit-landing" ssh-ed25519 AAAAC3Nza... laptop-1
+```
+
+The principal is the key's fingerprint, as `ssh-keygen -l -E sha256 -f <key>` prints it. `namespaces=` keeps the key from vouching for anything else. The comment after the key says whose machine it is. To add a lander, add their line; to retire one, remove it.
+
+Give it to the pipeline as the variable `RELEASE_DAMNIT_ALLOWED_SIGNERS`, holding the file's contents:
+
+- **GitHub**: an Actions variable on the organization (visible to its repositories) or on each repository: `gh variable set RELEASE_DAMNIT_ALLOWED_SIGNERS --org acme --visibility all < allowed_signers`, or `--repo acme/app`. The action reads it through `allowed-signers: ${{ vars.RELEASE_DAMNIT_ALLOWED_SIGNERS }}`.
+- **GitLab**: a CI/CD variable on the group or project. `release-damnit verify` reads it from the environment. The image needs `ssh-keygen` (`apk add openssh-keygen` on Alpine).
+
+Keep the list where a change to the repository cannot change it: a variable, not a file in the repository being verified.
+
 ## Syncing
 
 ```bash
@@ -244,16 +325,18 @@ release-damnit init --component web-app --extra-file 'json:package.json:$.versio
 
 For a single repo, init writes:
 
-- `release-please-config.json`: one root package with bare `v1.2.3` tags.
+- `release-please-config.json`: one root package with bare `v1.2.3` tags, and `"check": "make check"`, which land runs before every landing.
 - `release-please-manifest.json`: the current version.
 - `VERSION`, unless an extra file carries the version.
 - `CHANGELOG.md`, when missing.
-- On GitHub (`--forge github`, the default): `.github/workflows/release.yml`, which versions and publishes on push to main, then calls `.github/workflows/build.yml` with the new tag. `build.yml` is the repo's own build: a `workflow_call` workflow that takes a string input `tag` and checks out that tag.
-- On GitLab (`--forge gitlab`): `.gitlab-ci.yml`, whose `release` job downloads the release-damnit binary, versions every package since its last release, and publishes with `--provider gitlab --skip-ci push-option`. The new tag starts a tag pipeline that runs `.gitlab/build.yml`, the repo's own build (`$CI_COMMIT_TAG` is the release tag). init writes a starting `.gitlab/build.yml` only when the repo has none.
+- On GitHub (`--forge github`, the default): `.github/workflows/release.yml`, which verifies the landing proof, versions, and publishes on push to main, then calls `.github/workflows/build.yml` with the new tag. `build.yml` is the repo's own build: a `workflow_call` workflow that takes a string input `tag` and checks out that tag.
+- On GitLab (`--forge gitlab`): `.gitlab-ci.yml`, whose `release` job downloads the release-damnit binary, verifies the landing proof, versions every package since its last release, and publishes with `--provider gitlab --skip-ci push-option`. The new tag starts a tag pipeline that runs `.gitlab/build.yml`, the repo's own build (`$CI_COMMIT_TAG` is the release tag). init writes a starting `.gitlab/build.yml` only when the repo has none.
 
 Then it installs the hook.
 
 A GitLab repo needs one masked CI/CD variable, `GITLAB_RELEASE_TOKEN`: a project access token with the `api` and `write_repository` scopes and a role allowed to push to the default branch. The job pushes the version commit and tags with it and creates the release through the API.
+
+Either forge needs the variable `RELEASE_DAMNIT_ALLOWED_SIGNERS` ("Allowed signers" above), and the repo needs a `make check` target.
 
 Options: `--component` (default: the repo directory name), `--version` (default: the highest `v*` tag that is not a prerelease, else `package.json`'s version, else 0.0.0), `--extra-file` (repeatable; `json:<path>:<jsonpath>` or `generic:<path>`), `--force` (overwrite existing files; without it init lists them and stops), `--forge` (`github` or `gitlab`).
 
@@ -303,6 +386,7 @@ release-damnit uses your existing Release Please configuration files unchanged:
 | `scopes` | top | Repo-level commit scopes, for commits that touch no package. |
 | `types` | top | Allowed commit types (default `["feat","fix","chore","docs"]`). `"feat!"` means the same as `"feat"`. |
 | `subject-max-length` | top | Longest commit description (default 50). |
+| `check` | top | The repository's full check, one command line. `land` runs it before every landing and signs its proof; `verify` checks the proof names it. See "The landing proof". |
 
 Unknown keys are ignored. Every tag, compare link and release name comes from the same tag rule, so they always match.
 
@@ -371,6 +455,8 @@ This file is read to get current versions and updated with new versions.
 | `publish` | Commit the version files, tag that commit, push, then create releases | `false` |
 | `before-publish` | Shell command run after the versions are written and before the version commit, only when something is released. `RELEASE_REPORT` points at the report JSON. | `''` |
 | `publish-add` | Space-separated paths `before-publish` changed that belong in the version commit | `''` |
+| `verify` | First run `release-damnit verify` on the commit being released, and fail the run when its landing proof is missing or wrong. The `publish-add` paths are passed as `--allow`. | `false` |
+| `allowed-signers` | With `verify`: the allowed signers, usually `${{ vars.RELEASE_DAMNIT_ALLOWED_SIGNERS }}`. Empty with `verify` on fails the run. | `''` |
 
 With `publish` on, the action runs the analysis with `--report-file`, sets the git identity to `github-actions[bot]`, runs `before-publish`, then runs `release-damnit publish` with one `--add` per `publish-add` path. The job needs `permissions: contents: write`.
 
@@ -426,6 +512,9 @@ jobs:
       - id: release
         uses: dsswift/release-damnit@v1.9.2
         with:
+          # Refuse a commit that carries no landing proof.
+          verify: 'true'
+          allowed-signers: ${{ vars.RELEASE_DAMNIT_ALLOWED_SIGNERS }}
           since-last-release: 'true'
           publish: 'true'
           # A Node repo refreshes its lock file in the same commit:

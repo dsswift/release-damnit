@@ -38,6 +38,11 @@ type Config struct {
 	// SubjectMaxLength is the longest commit description allowed, counted
 	// after the "type(scope): " prefix.
 	SubjectMaxLength int
+
+	// Check is the repository's full check, one shell command line that
+	// land runs before every landing and names in the landing proof. Empty
+	// means the repository names none, and its landings carry no proof.
+	Check string
 }
 
 // ConfigFile and ManifestFile are the release-please file names at the repo root.
@@ -122,6 +127,7 @@ type releasePleaseConfig struct {
 	Scopes                []string `json:"scopes"`
 	Types                 []string `json:"types"`
 	SubjectMaxLength      *int     `json:"subject-max-length"`
+	Check                 string   `json:"check"`
 }
 
 type packageConfig struct {
@@ -195,6 +201,11 @@ func Load(repoRoot string) (*Config, error) {
 		subjectMax = *rpConfig.SubjectMaxLength
 	}
 
+	check, err := validCheck(rpConfig.Check)
+	if err != nil {
+		return nil, err
+	}
+
 	// Build config
 	config := &Config{
 		Packages:         make(map[string]*Package),
@@ -203,6 +214,7 @@ func Load(repoRoot string) (*Config, error) {
 		Scopes:           rpConfig.Scopes,
 		Types:            types,
 		SubjectMaxLength: subjectMax,
+		Check:            check,
 	}
 
 	// Build linked groups lookup (component name -> group name)
@@ -433,3 +445,37 @@ func (p *Package) ChangelogFile() string { return p.RepoPath(p.ChangelogPath) }
 
 // IsRoot reports whether this is the root package (config key ".").
 func (p *Package) IsRoot() bool { return p.Path == "" }
+
+// ReleaseFiles is every repo-relative file a version commit may change: each
+// package's VERSION file, changelog, and extra-files, and the manifest.
+func (c *Config) ReleaseFiles() map[string]bool {
+	files := map[string]bool{ManifestFile: true}
+	for _, pkg := range c.Packages {
+		files[pkg.VersionFile()] = true
+		files[pkg.ChangelogFile()] = true
+		for _, extra := range pkg.ExtraFiles {
+			files[pkg.RepoPath(extra.Path)] = true
+		}
+	}
+	return files
+}
+
+// ParseCheck returns the "check" command of a release-please-config.json's
+// contents, or "" when it names none.
+func ParseCheck(data []byte) (string, error) {
+	var c struct {
+		Check string `json:"check"`
+	}
+	if err := json.Unmarshal(data, &c); err != nil {
+		return "", fmt.Errorf("failed to parse release-please-config.json: %w", err)
+	}
+	return validCheck(c.Check)
+}
+
+func validCheck(check string) (string, error) {
+	trimmed := strings.TrimSpace(check)
+	if strings.ContainsAny(trimmed, "\r\n") {
+		return "", fmt.Errorf("check must be one command line, got %q", check)
+	}
+	return trimmed, nil
+}

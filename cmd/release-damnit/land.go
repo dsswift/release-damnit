@@ -21,6 +21,12 @@ check them, and push. With a branch (or on a branch): merge it into the remote
 main with --no-ff in a temporary worktree, check its commits, push, and move
 local main to the result. Retries when main moves on the remote meanwhile.
 
+Before each push it runs the repository's check (release-please-config.json
+"check") on exactly the tree that lands, signs a landing proof with your SSH
+signing key (git's user.signingkey), and pushes it as a git note on
+refs/notes/release-damnit with the commit, atomically. A failed check pushes
+nothing. release-damnit verify checks the proof in the pipeline.
+
 Options:`)
 		fs.PrintDefaults()
 	}

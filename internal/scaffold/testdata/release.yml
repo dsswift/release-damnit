@@ -27,9 +27,15 @@ jobs:
         with:
           ref: ${{ github.ref_name }}
           fetch-depth: 0
+      # Verify first: the commit being released must carry the landing
+      # proof release-damnit land signed after the check passed. The
+      # estate's allowed signers are the repository or organization
+      # variable RELEASE_DAMNIT_ALLOWED_SIGNERS.
       - id: release
         uses: dsswift/release-damnit@{{release}}
         with:
+          verify: 'true'
+          allowed-signers: ${{ vars.RELEASE_DAMNIT_ALLOWED_SIGNERS }}
           since-last-release: 'true'
           publish: 'true'
 

@@ -26,6 +26,7 @@ var commands = map[string]func(args []string) int{
 	"check-commits": runCheckCommits,
 	"commit":        runCommit,
 	"land":          runLand,
+	"verify":        runVerify,
 	"sync":          runSync,
 	"hooks":         runHooks,
 	"publish":       runPublish,
@@ -66,7 +67,8 @@ Commands:
   check-commit <msgfile>   Check a commit message against the staged files (commit-msg hook)
   check-commits <range>    Check every non-merge commit in a revision range
   commit                   Commit pending changes, grouped and worded by Claude to pass the rules
-  land [branch]            Land main's local commits, or a branch as a --no-ff merge, and push
+  land [branch]            Run the check, sign its proof, and land main's local commits, or a branch as a --no-ff merge
+  verify                   Check that the commit being released carries a valid landing proof (pipeline step)
   sync [dir...]            Fast-forward local main to the remote, carrying uncommitted changes
   hooks                    Install the commit-msg hook that runs check-commit
   publish                  Commit the version files, tag that commit, push, create releases

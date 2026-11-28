@@ -162,6 +162,7 @@ type scaffoldConfig struct {
 	IncludeComponentInTag bool                       `json:"include-component-in-tag"`
 	Types                 []string                   `json:"types"`
 	Scopes                []string                   `json:"scopes"`
+	Check                 string                     `json:"check"`
 	Packages              map[string]scaffoldPackage `json:"packages"`
 }
 
@@ -171,6 +172,10 @@ type scaffoldPackage struct {
 	ExtraFiles    []config.ExtraFile `json:"extra-files,omitempty"`
 }
 
+// DefaultCheck is the check a scaffolded config names: the repository's
+// make check, which land runs before every landing.
+const DefaultCheck = "make check"
+
 // ConfigJSON renders the release-please config for one root package whose
 // tags are bare versions (v1.2.3).
 func ConfigJSON(component string, extraFiles []config.ExtraFile) ([]byte, error) {
@@ -179,6 +184,7 @@ func ConfigJSON(component string, extraFiles []config.ExtraFile) ([]byte, error)
 		IncludeComponentInTag: false,
 		Types:                 config.DefaultTypes,
 		Scopes:                []string{},
+		Check:                 DefaultCheck,
 		Packages: map[string]scaffoldPackage{
 			config.RootManifestKey: {Component: component, ChangelogPath: "CHANGELOG.md", ExtraFiles: extraFiles},
 		},

@@ -8,6 +8,7 @@
     "docs"
   ],
   "scopes": [],
+  "check": "make check",
   "packages": {
     ".": {
       "component": "widget",

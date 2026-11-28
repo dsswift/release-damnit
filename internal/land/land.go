@@ -7,6 +7,11 @@
 // with uncommitted changes, often another person's work in progress, lands
 // its commits the branch way and then fast-forwards, carrying those changes
 // forward without losing them (sync.go).
+//
+// Before each push, land runs the repository's check (release-please-config
+// "check") in a checkout of exactly the tree that lands, signs a landing
+// proof for that tree, and pushes it as a git note with the commit, in one
+// atomic push. A check that fails pushes nothing (proof.go).
 package land
 
 import (
@@ -19,6 +24,7 @@ import (
 
 	"github.com/dsswift/release-damnit/internal/commitcheck"
 	"github.com/dsswift/release-damnit/internal/git"
+	"github.com/dsswift/release-damnit/internal/proof"
 )
 
 // Options configures a landing.
@@ -56,6 +62,10 @@ type lander struct {
 	prefix string // starts every line; Prefix when empty
 	root   string
 	remote string // refs/remotes/<remote>/<main>
+
+	notesBase string                 // the remote's proof notes at the last fetch, "" for none
+	signer    *proof.Signer          // resolved at the first proof
+	proofs    map[string]proof.Proof // by tree: a tree checked once is not checked again
 }
 
 // Run lands per opts.
@@ -80,7 +90,7 @@ func Run(opts Options) error {
 	if err != nil {
 		return err
 	}
-	l := &lander{Options: opts, root: root, remote: "refs/remotes/" + opts.Remote + "/" + opts.Main}
+	l := &lander{Options: opts, root: root, remote: "refs/remotes/" + opts.Remote + "/" + opts.Main, proofs: map[string]proof.Proof{}}
 
 	dirty, err := isDirty(root)
 	if err != nil {
@@ -136,6 +146,11 @@ func (l *lander) fetch(attempt int) (string, error) {
 	if err := git.Stream(l.root, l.Out, "fetch", "--quiet", l.Remote, "+refs/heads/"+l.Main+":"+l.remote); err != nil {
 		return "", err
 	}
+	notes, err := proof.FetchNotes(l.root, l.Remote)
+	if err != nil {
+		return "", err
+	}
+	l.notesBase = notes
 	return l.git("rev-parse", l.remote)
 }
 
@@ -153,25 +168,49 @@ func (l *lander) check(revRange string) error {
 	return nil
 }
 
-// push pushes dir's HEAD to the remote main. A rejected push reports whether
-// the remote main moved from base, which is the race worth retrying.
-func (l *lander) push(dir, base string, attempt int) (pushed bool, err error) {
-	if err := git.Stream(dir, l.Out, "push", l.Remote, "HEAD:refs/heads/"+l.Main); err == nil {
+// push pushes dir's HEAD to the remote main, and with proved, the proof
+// notes too, atomically: main never lands without its proof. A rejected push
+// reports whether the remote main or its proofs moved from what was fetched,
+// which is the race worth retrying.
+func (l *lander) push(dir, base string, proved bool, attempt int) (pushed bool, err error) {
+	args := []string{"push", "--atomic", l.Remote, "HEAD:refs/heads/" + l.Main}
+	if proved {
+		args = append(args, proof.NotesRef+":"+proof.NotesRef)
+	}
+	if err := git.Stream(dir, l.Out, args...); err == nil {
 		return true, nil
 	}
-	now, err := l.git("ls-remote", l.Remote, "refs/heads/"+l.Main)
+	now, err := l.lsRemote("refs/heads/" + l.Main)
 	if err != nil {
 		return false, err
 	}
-	now, _, _ = strings.Cut(now, "\t")
-	if now == "" || now == base {
+	notes, err := l.lsRemote(proof.NotesRef)
+	if err != nil {
+		return false, err
+	}
+	mainMoved := now != "" && now != base
+	notesMoved := proved && notes != l.notesBase
+	if !mainMoved && !notesMoved {
 		return false, fmt.Errorf("push refused and %s/%s did not move; read the hook/server output above", l.Remote, l.Main)
 	}
 	if attempt >= l.Attempts {
 		return false, fmt.Errorf("%s/%s kept moving; gave up after %d attempts", l.Remote, l.Main, attempt)
 	}
-	l.logf("%s/%s moved (now %s), retrying (attempt %d/%d)", l.Remote, l.Main, short(now), attempt+1, l.Attempts)
+	if mainMoved {
+		l.logf("%s/%s moved (now %s), retrying (attempt %d/%d)", l.Remote, l.Main, short(now), attempt+1, l.Attempts)
+	} else {
+		l.logf("another landing pushed its proof first, retrying (attempt %d/%d)", attempt+1, l.Attempts)
+	}
 	return false, nil
+}
+
+func (l *lander) lsRemote(ref string) (string, error) {
+	out, err := l.git("ls-remote", l.Remote, ref)
+	if err != nil {
+		return "", err
+	}
+	sha, _, _ := strings.Cut(out, "\t")
+	return sha, nil
 }
 
 func (l *lander) landMain() error {
@@ -201,7 +240,15 @@ func (l *lander) landMain() error {
 		if err := l.check(base + "..HEAD"); err != nil {
 			return err
 		}
-		pushed, err := l.push(l.root, base, attempt)
+		head, err := l.git("rev-parse", "HEAD")
+		if err != nil {
+			return err
+		}
+		proved, err := l.prove(head, l.root)
+		if err != nil {
+			return err
+		}
+		pushed, err := l.push(l.root, base, proved, attempt)
 		if err != nil {
 			return err
 		}
@@ -333,8 +380,18 @@ func (l *lander) mergeAndPush(branch, base string, attempt int) (merged string, 
 	if err != nil {
 		return "", false, err
 	}
-	l.logf("merged %s onto %s/%s as %s; pushing", branch, l.Remote, l.Main, short(merged))
-	pushed, err = l.push(dir, base, attempt)
+	l.logf("merged %s onto %s/%s as %s", branch, l.Remote, l.Main, short(merged))
+	// The branch's own checkout has its dependencies; it serves when the
+	// merge did not change its tree. Otherwise the merge's worktree does.
+	dirs := []string{dir}
+	if path, checkedOut, err := l.worktreeOf("refs/heads/" + branch); err == nil && checkedOut {
+		dirs = []string{path, dir}
+	}
+	proved, err := l.prove(merged, dirs...)
+	if err != nil {
+		return "", false, err
+	}
+	pushed, err = l.push(dir, base, proved, attempt)
 	return merged, pushed, err
 }
 

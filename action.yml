@@ -47,6 +47,14 @@ inputs:
     description: 'Space-separated paths the before-publish step changed that belong in the version commit'
     required: false
     default: ''
+  verify:
+    description: 'Before anything else, check that the commit being released carries a landing proof signed by an allowed signer (release-damnit verify). Fails the run when it does not.'
+    required: false
+    default: 'false'
+  allowed-signers:
+    description: 'With verify: the allowed signers (ssh-keygen ALLOWED SIGNERS format) whose landing proofs a release accepts, usually the variable RELEASE_DAMNIT_ALLOWED_SIGNERS'
+    required: false
+    default: ''
 
 outputs:
   releases_created:
@@ -121,6 +129,23 @@ runs:
         BUILD_SHA="$(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
         go build -ldflags "-X main.version=$BUILD_VERSION -X main.gitSha=$BUILD_SHA" \
           -o "$RUNNER_TEMP/release-damnit-bin/release-damnit" ./cmd/release-damnit
+
+    - name: Verify the landing proof
+      if: inputs.verify == 'true'
+      shell: bash
+      env:
+        RELEASE_DAMNIT_ALLOWED_SIGNERS: ${{ inputs.allowed-signers }}
+        INPUT_PUBLISH_ADD: ${{ inputs.publish-add }}
+      run: |
+        if [ -z "${RELEASE_DAMNIT_ALLOWED_SIGNERS//[[:space:]]/}" ]; then
+          echo "::error::verify is on, but allowed-signers is empty. Set the variable RELEASE_DAMNIT_ALLOWED_SIGNERS on the repository or its organization to the estate's allowed signers."
+          exit 1
+        fi
+        ALLOW=()
+        for path in $INPUT_PUBLISH_ADD; do
+          ALLOW+=(--allow "$path")
+        done
+        release-damnit verify "${ALLOW[@]}"
 
     - name: Run release-damnit
       id: release

@@ -1,15 +1,15 @@
 # Documentation
 
-## Architecture Decision Records
+## Decision records
 
-Significant architectural decisions are documented in [adr/](./adr/):
+The decision records live in a Vantage registry, `RD`, which `vantage.yaml` names:
 
-| ADR | Title | Status |
-|-----|-------|--------|
-| [ADR-000](./adr/adr-000-use-adrs.md) | Use Architecture Decision Records | Accepted |
-| [ADR-001](./adr/adr-001-implementation-language.md) | Implementation Language (Go) | Accepted |
-| [ADR-002](./adr/adr-002-testing-strategy.md) | Testing Strategy | Accepted |
-| [ADR-003](./adr/adr-003-config-compatibility.md) | Config Compatibility with Release Please | Accepted |
+| Record | Title |
+|--------|-------|
+| RD-5001 | Implementation Language (Go) |
+| RD-5002 | Testing Strategy |
+| RD-5003 | Config Compatibility with Release Please |
+| RD-5004 | A landing signs proof of its check, and a release verifies it |
 
 ## Blog
 

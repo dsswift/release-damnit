@@ -78,7 +78,7 @@ The only change: read git history correctly.
 
 ### Why Go?
 
-See [ADR-001](./adr/adr-001-implementation-language.md) for the full analysis, but the short version:
+See decision RD-5001 for the full analysis, but the short version:
 - Explicit error handling (`result, err` everywhere)
 - Single binary distribution
 - Cross-compile with environment variables
